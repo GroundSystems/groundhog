@@ -51,6 +51,10 @@
       {
         "label": "GitHub",
         "href": "https://github.com/GroundSystems/groundhog"
+      },
+      {
+        "label": "Contract",
+        "href": "https://github.com/GroundSystems/groundhog/tree/cleanup/spec"
       }
     ],
     "primary": {
@@ -146,6 +150,10 @@
           {
             "label": "Groundhog repository",
             "href": "https://github.com/GroundSystems/groundhog"
+          },
+          {
+            "label": "Published contract",
+            "href": "https://github.com/GroundSystems/groundhog/tree/cleanup/spec"
           }
         ]
       }

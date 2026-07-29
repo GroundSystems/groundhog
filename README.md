@@ -1,8 +1,8 @@
 # Groundhog
 
 This public repository provides Groundhog downloads, user documentation, and published
-contracts. The private `GroundSystems/groundhog-src` repository contains the canonical
-Groundhog source.
+contracts. The private [`GroundSystems/groundhog-src`](https://github.com/GroundSystems/groundhog-src)
+repository contains the canonical Groundhog source.
 
 ## Support and feature requests
 
@@ -29,6 +29,13 @@ third-party license notices.
 
 The Groundhog manual is maintained in [`docs/`](docs/). Its `docs.json` configuration is ready
 for a Mintlify deployment using `/docs` as the documentation path.
+
+## Published contract
+
+The [`spec/`](spec/) contract and [`tests/test-vectors/`](tests/test-vectors/) compatibility
+vectors are generated copies from `GroundSystems/groundhog-src`. Do not edit these published
+copies directly. [`spec/publication-manifest.json`](spec/publication-manifest.json) lists every
+file selected for publication.
 
 ## License
 

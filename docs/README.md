@@ -32,6 +32,14 @@ shared configuration, ownership, output, and exit behavior.
 | [`rebuild`](commands.md#rebuild) | Reconstruct the warehouse from the log. |
 | [`verify`](commands.md#verify) | Verify storage and the integrity chain. |
 
+## Published contract
+
+The [contract](../spec/README.md) and
+[compatibility vectors](../tests/test-vectors/README.md) are generated copies from the private
+canonical [`GroundSystems/groundhog-src`](https://github.com/GroundSystems/groundhog-src)
+repository. Do not edit these copies directly. The
+[publication manifest](../spec/publication-manifest.json) lists every published file.
+
 ## System pages
 
 | page | scope |

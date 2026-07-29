@@ -27,5 +27,13 @@ automations, and operators replay or query them through the same API.
   backup.
 - **Reference** provides concise Unix-manual-style summaries.
 
+## Published contract
+
+The public [Groundhog contract](https://github.com/GroundSystems/groundhog/tree/cleanup/spec)
+and [compatibility vectors](https://github.com/GroundSystems/groundhog/tree/cleanup/tests/test-vectors)
+are generated copies from the private canonical
+[`GroundSystems/groundhog-src`](https://github.com/GroundSystems/groundhog-src) repository. Do
+not edit the published copies directly.
+
 Use `groundhog --help`, `groundhog <COMMAND> --help`, and `groundhog --version` to confirm
 the installed binary's surface.
