@@ -1,0 +1,135 @@
+{
+  "canonical": [
+    {
+      "name": "whitespace-and-key-order",
+      "input": "{ \"b\" : 1 , \"a\" : { \"z\" : true , \"y\" : null } }",
+      "jcs": "{\"a\":{\"y\":null,\"z\":true},\"b\":1}"
+    },
+    {
+      "name": "utf16-key-order",
+      "input": "{\"\\u20ac\":\"Euro\",\"\\r\":\"CR\",\"\\ufb33\":\"Dalet dagesh\",\"1\":\"One\",\"\\ud83d\\ude00\":\"Emoji\",\"\\u0080\":\"Control\",\"\\u00f6\":\"o-diaeresis\"}",
+      "jcs": "{\"\\r\":\"CR\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"o-diaeresis\",\"€\":\"Euro\",\"😀\":\"Emoji\",\"דּ\":\"Dalet dagesh\"}"
+    },
+    {
+      "name": "numbers",
+      "input": "[1.0,-0,0.1,1E+2,1e30,1e21,1e20,0.000001,1e-7,5e-324,9007199254740991,-9007199254740991,9007199254740992,-9007199254740992,333333333.33333329,18446744073709551617.0]",
+      "jcs": "[1,0,0.1,100,1e+30,1e+21,100000000000000000000,0.000001,1e-7,5e-324,9007199254740991,-9007199254740991,9007199254740992,-9007199254740992,333333333.3333333,18446744073709552000]"
+    },
+    {
+      "name": "escapes",
+      "input": "\"\\u000B\\u0041\\b\\t\\n\\f\\r\\\"\\\\\\/\"",
+      "jcs": "\"\\u000bA\\b\\t\\n\\f\\r\\\"\\\\/\""
+    },
+    {
+      "name": "unicode-literal-and-escaped-pair",
+      "input": "[\"\\u20ac\",\"\\ud83d\\ude00\",\"€\"]",
+      "jcs": "[\"€\",\"😀\",\"€\"]"
+    },
+    {
+      "name": "empty-structures",
+      "input": "{\"a\":[],\"b\":{},\"c\":\"\"}",
+      "jcs": "{\"a\":[],\"b\":{},\"c\":\"\"}"
+    },
+    {
+      "name": "scalar",
+      "input": "42",
+      "jcs": "42"
+    }
+  ],
+  "ieee754": [
+    { "bits": "0000000000000000", "jcs": "0" },
+    { "bits": "8000000000000000", "jcs": "0" },
+    { "bits": "0000000000000001", "jcs": "5e-324" },
+    { "bits": "8000000000000001", "jcs": "-5e-324" },
+    { "bits": "7fefffffffffffff", "jcs": "1.7976931348623157e+308" },
+    { "bits": "ffefffffffffffff", "jcs": "-1.7976931348623157e+308" },
+    { "bits": "4340000000000000", "jcs": "9007199254740992" },
+    { "bits": "c340000000000000", "jcs": "-9007199254740992" },
+    { "bits": "4430000000000000", "jcs": "295147905179352830000" },
+    { "bits": "44b52d02c7e14af5", "jcs": "9.999999999999997e+22" },
+    { "bits": "44b52d02c7e14af6", "jcs": "1e+23" },
+    { "bits": "44b52d02c7e14af7", "jcs": "1.0000000000000001e+23" },
+    { "bits": "444b1ae4d6e2ef4e", "jcs": "999999999999999700000" },
+    { "bits": "444b1ae4d6e2ef4f", "jcs": "999999999999999900000" },
+    { "bits": "444b1ae4d6e2ef50", "jcs": "1e+21" },
+    { "bits": "3eb0c6f7a0b5ed8c", "jcs": "9.999999999999997e-7" },
+    { "bits": "3eb0c6f7a0b5ed8d", "jcs": "0.000001" },
+    { "bits": "41b3de4355555553", "jcs": "333333333.3333332" },
+    { "bits": "41b3de4355555554", "jcs": "333333333.33333325" },
+    { "bits": "41b3de4355555555", "jcs": "333333333.3333333" },
+    { "bits": "41b3de4355555556", "jcs": "333333333.3333334" },
+    { "bits": "41b3de4355555557", "jcs": "333333333.33333343" },
+    { "bits": "becbf647612f3696", "jcs": "-0.0000033333333333333333" },
+    { "bits": "43143ff3c1cb0959", "jcs": "1424953923781206.2" }
+  ],
+  "limits": {
+    "max_payload_nesting": 128
+  },
+  "rejects": [
+    {
+      "name": "duplicate-key",
+      "input": "{\"a\":1,\"a\":2}",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "nested-duplicate-key",
+      "input": "{\"x\":{\"a\":1,\"a\":2}}",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "escaped-equivalent-duplicate-key",
+      "input": "{\"a\":1,\"\\u0061\":2}",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "integer-alias-above-2^53",
+      "input": "9007199254740993",
+      "reason": "integer-out-of-range"
+    },
+    {
+      "name": "negative-integer-alias-below-2^53",
+      "input": "-9007199254740993",
+      "reason": "integer-out-of-range"
+    },
+    {
+      "name": "integer-64bit-id",
+      "input": "{\"id\":18446744073709551617}",
+      "reason": "integer-out-of-range"
+    },
+    {
+      "name": "overflowing-exponent",
+      "input": "1e999",
+      "reason": "non-finite"
+    },
+    {
+      "name": "lone-high-surrogate",
+      "input": "\"\\ud800\"",
+      "reason": "malformed-unicode"
+    },
+    {
+      "name": "high-surrogate-then-text",
+      "input": "\"\\ud800x\"",
+      "reason": "malformed-unicode"
+    },
+    {
+      "name": "lone-low-surrogate",
+      "input": "\"\\udc00\"",
+      "reason": "malformed-unicode"
+    },
+    {
+      "name": "leading-zero",
+      "input": "01",
+      "reason": "not-json"
+    },
+    {
+      "name": "trailing-comma",
+      "input": "[1,]",
+      "reason": "not-json"
+    },
+    {
+      "name": "raw-control-char",
+      "input": "\"\u0001\"",
+      "reason": "not-json"
+    }
+  ]
+}
