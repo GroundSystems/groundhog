@@ -1,7 +1,13 @@
-# Groundhog releases and documentation
+# Groundhog
 
-This public repository contains Groundhog release downloads and user documentation. The
-Groundhog source repository is private.
+This public repository provides Groundhog downloads, user documentation, and published
+contracts. The private `GroundSystems/groundhog-src` repository contains the canonical
+Groundhog source.
+
+## Support and feature requests
+
+Use [GitHub Issues](https://github.com/GroundSystems/groundhog/issues) for support requests
+and feature requests. This public repository does not use GitHub Projects.
 
 ## Install with Homebrew
 
