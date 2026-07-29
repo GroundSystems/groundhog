@@ -50,13 +50,13 @@
       },
       {
         "label": "GitHub",
-        "href": "https://github.com/GroundSystems/groundhog-releases"
+        "href": "https://github.com/GroundSystems/groundhog"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Download",
-      "href": "https://github.com/GroundSystems/groundhog-releases/releases"
+      "href": "https://github.com/GroundSystems/groundhog/releases"
     }
   },
   "navigation": {
@@ -112,7 +112,7 @@
   "footer": {
     "socials": {
       "website": "https://groundhog.so",
-      "github": "https://github.com/GroundSystems/groundhog-releases"
+      "github": "https://github.com/GroundSystems/groundhog"
     },
     "links": [
       {
@@ -141,11 +141,11 @@
           },
           {
             "label": "Releases",
-            "href": "https://github.com/GroundSystems/groundhog-releases/releases"
+            "href": "https://github.com/GroundSystems/groundhog/releases"
           },
           {
-            "label": "Release repository",
-            "href": "https://github.com/GroundSystems/groundhog-releases"
+            "label": "Groundhog repository",
+            "href": "https://github.com/GroundSystems/groundhog"
           }
         ]
       }

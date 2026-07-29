@@ -16,7 +16,7 @@ use the same API.
 ## 1. Install the binary
 
 Download the versioned archive and checksum from the
-[Groundhog releases](https://github.com/GroundSystems/groundhog-releases/releases). Published archives
+[Groundhog releases](https://github.com/GroundSystems/groundhog/releases). Published archives
 target Apple Silicon macOS and x86-64 Linux. Each archive contains `groundhog`, `BUILD-INFO`,
 the Groundhog license, and third-party license notices.
 
@@ -25,8 +25,8 @@ For version `0.1.0`:
 ```sh
 VERSION=0.1.0
 ARCHIVE="groundhog-${VERSION}-aarch64-apple-darwin.tar.gz"
-curl -LO "https://github.com/GroundSystems/groundhog-releases/releases/download/v${VERSION}/${ARCHIVE}"
-curl -LO "https://github.com/GroundSystems/groundhog-releases/releases/download/v${VERSION}/${ARCHIVE}.sha256"
+curl -LO "https://github.com/GroundSystems/groundhog/releases/download/v${VERSION}/${ARCHIVE}"
+curl -LO "https://github.com/GroundSystems/groundhog/releases/download/v${VERSION}/${ARCHIVE}.sha256"
 shasum -a 256 -c "${ARCHIVE}.sha256"
 tar -xzf "${ARCHIVE}"
 sudo install -m 0755 groundhog /usr/local/bin/groundhog

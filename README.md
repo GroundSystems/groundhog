@@ -15,7 +15,7 @@ The formula is maintained in
 ## Direct downloads
 
 Versioned Apple Silicon macOS and x86-64 Linux archives and their SHA-256 checksums are
-published under [GitHub Releases](https://github.com/GroundSystems/groundhog-releases/releases).
+published under [GitHub Releases](https://github.com/GroundSystems/groundhog/releases).
 Every archive includes the `groundhog` binary, build provenance, the Groundhog license, and
 third-party license notices.
 
