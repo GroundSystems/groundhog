@@ -1,0 +1,12 @@
+steps:
+  - label: "Tests / docs"
+    key: "docs"
+    agents:
+      queue: "linux-small"
+    timeout_in_minutes: 10
+    command: |
+      set -euo pipefail
+      python3 .buildkite/scripts/check-docs.py
+    notify:
+      - github_check:
+          name: "Tests / docs"
