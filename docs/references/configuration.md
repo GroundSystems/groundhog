@@ -65,7 +65,7 @@ The durable log is `<dir>/log/`. The disposable published warehouse is
 
 One of:
 
-- `open`: owner-controlled local files and API access;
+- `open`: operator-readable local files and API access;
 - `governed`: reserved for authenticated policy and audit enforcement; or
 - `locked`: reserved for governed access plus encryption and external key custody.
 

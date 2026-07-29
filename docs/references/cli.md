@@ -36,7 +36,7 @@ deployment.
 One deployment is selected by `groundhog.toml`. Its log is the durable truth. The warehouse is
 derived state that may lag the log and can be replaced by replaying it.
 
-The current binary is local and owner-controlled. It enforces only security mode `open`.
+The current binary runs locally in the operator's infrastructure. It enforces only security mode `open`.
 Operations that would extend or attest history support integrity anchor `none`; they refuse a
 stronger configured anchor requirement.
 

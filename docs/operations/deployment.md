@@ -187,7 +187,7 @@ checks or edit storage metadata.
 
 ## Security posture
 
-The binary is an owner-controlled local core. Protect the configuration, socket parent, data directory,
+The binary runs locally in the operator's infrastructure. Protect the configuration, socket parent, data directory,
 backups, process account, and any operator-managed proxy. A bearer token protects API requests
 but does not encrypt owner-readable files or provide governed/locked operation.
 
