@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groundhog.dev/spec/v1/schemas/append-batch.schema.json",
+  "title": "Groundhog append batch",
+  "type": "object",
+  "required": ["batch_id", "source", "events"],
+  "properties": {
+    "v": {
+      "const": 1,
+      "default": 1
+    },
+    "batch_id": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "^groundhog/"
+      }
+    },
+    "source": {
+      "type": "string",
+      "pattern": "^[a-z0-9_][a-z0-9_.-]*$",
+      "not": {
+        "const": "system"
+      }
+    },
+    "stream_precondition": {
+      "$ref": "#/$defs/stream_precondition"
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/submitted_event"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "submitted_event": {
+      "type": "object",
+      "required": ["stream", "record_key", "kind", "payload"],
+      "properties": {
+        "stream": {
+          "type": "string",
+          "pattern": "^[a-z0-9_][a-z0-9_.-]*$"
+        },
+        "record_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+        },
+        "payload": true
+      },
+      "additionalProperties": false
+    },
+    "stream_precondition": {
+      "type": "object",
+      "required": ["stream", "expected_frontier"],
+      "properties": {
+        "stream": {
+          "type": "string",
+          "pattern": "^[a-z0-9_][a-z0-9_.-]*$"
+        },
+        "expected_frontier": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
