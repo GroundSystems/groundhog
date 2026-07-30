@@ -1,0 +1,1 @@
+{"format_id":"groundhog/log","min_reader":1,"min_writer":1,"schema_version":1,"stability":"stable","type":"format"}

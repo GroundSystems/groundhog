@@ -1,21 +1,20 @@
 ---
 title: groundhog commands
-description: Complete command reference for the released groundhog binary.
+description: Complete command reference for the Groundhog 0.2 binary.
 ---
 
-The released binary supports this deployment lifecycle:
+Groundhog 0.2 uses this deployment lifecycle:
 
 ```text
-init -> serve -> project -> verify
-          |         |
-        ingest    query/catalog
+init -> serve -> ingest, replay, follow, streams, source retirement
+          |
+       stop serve -> seal -> serve again
 
-stop serve -> seal -> serve again
-rebuild whenever the disposable warehouse must be replaced
+verify can run while serve is active
 ```
 
-Ingest, replay, query, and catalog use the HTTP API exposed by `serve`. They are not CLI
-commands.
+Ingest, replay, follow, stream enumeration, and source retirement use the HTTP API.
+They are not CLI commands.
 
 ## Synopsis
 
@@ -25,29 +24,29 @@ groundhog [--config <PATH>] <COMMAND>
 groundhog init [DIR]
 groundhog serve
 groundhog seal
-groundhog project
-groundhog rebuild
 groundhog verify [--chain]
 ```
 
-Run `groundhog --help` or `groundhog <COMMAND> --help` for the help embedded in a particular
-build.
+Run `groundhog --help` or `groundhog <COMMAND> --help` for the help in an installed build.
 
 ## Behavior shared by all commands
 
 ### Configuration
 
-`--config <PATH>` is global, may appear before or after the command, and defaults to
-`./groundhog.toml`. Every command except `init` loads and validates it before opening
-deployment state. Relative paths inside the file resolve against the file's directory.
+`--config <PATH>` is global and defaults to `./groundhog.toml`.
+It can occur before or after the command.
 
-`init` accepts the option because it is global but ignores it; initialization always writes
-`<DIR>/groundhog.toml`.
+Every command except `init` loads and validates the selected file before it opens deployment state.
+Relative paths in the file resolve against the file's directory.
 
-Unknown configuration keys, missing files, and invalid limits are usage errors. The binary
-supports security mode `open`. Commands that extend or attest history support anchor mode `none`;
-they refuse stronger configured guarantees rather than silently weakening them.
+`init` accepts the global option but ignores it.
+Initialization always writes `<DIR>/groundhog.toml`.
 
+Unknown configuration keys and invalid limits are usage errors.
+The binary supports security mode `open` and anchor mode `none`.
+It refuses configured guarantees that this release cannot provide.
+
+Groundhog 0.2 rejects the removed `[query]` section with an exact migration instruction.
 See [Configuration](/references/configuration).
 
 ### Ownership and concurrency
@@ -55,28 +54,28 @@ See [Configuration](/references/configuration).
 | command | deployment access | can run with live `serve` |
 |---|---|---:|
 | `init` | creates or validates owned paths | no |
-| `serve` | owns log writer and socket | it is the service |
-| `seal` | owns log writer | no |
-| `project` | reads log; publishes warehouse | yes |
-| `rebuild` | reads log; replaces warehouse | yes |
-| `verify` | read-only log analysis | yes |
+| `serve` | owns the log writer and socket | it is the service |
+| `seal` | owns the log writer | no |
+| `verify` | reads one coherent log snapshot | yes |
 
-The log has exactly one writer. `serve` and `seal` never bypass that lock. Warehouse publishers
-coordinate separately and replace only complete generations.
+The log has one writer.
+`serve` and `seal` never bypass the writer lock.
 
 ### Output and exit status
 
-Human lifecycle output and diagnostics go to standard error and are not stable parsing
-interfaces. Lifecycle commands produce no machine-readable standard output. `verify` produces
-one JSON document on standard output when it succeeds or conclusively finds a violation.
+Lifecycle output and diagnostics use standard error.
+They are not stable parsing interfaces.
+
+Lifecycle commands produce no machine-readable standard output.
+`verify` produces one JSON document on standard output after a complete result.
 
 | code | meaning |
 |---:|---|
-| 0 | Command succeeded. |
-| 1 | Operational failure such as I/O, permissions, engine failure, or a held lock. |
-| 2 | Bad arguments or unusable configuration; deployment work was not attempted. |
-| 3 | `verify` conclusively found a storage or integrity violation. |
-| 4 | The binary deliberately refused an unsupported mode, anchor, capability, or format. |
+| 0 | The command succeeded. |
+| 1 | An operational error occurred, such as I/O failure or a held lock. |
+| 2 | The arguments or configuration were invalid. |
+| 3 | `verify` found a storage or integrity violation. |
+| 4 | The binary refused an unsupported mode, anchor, capability, or format. |
 
 ## `init`
 
@@ -84,25 +83,28 @@ one JSON document on standard output when it succeeds or conclusively finds a vi
 groundhog init [DIR]
 ```
 
-Creates an immediately serveable deployment. `DIR` defaults to the current directory.
+`init` creates a deployment that `serve` can open immediately.
+`DIR` defaults to the current directory.
 
-Initialization creates an empty log, an empty query warehouse, and generated configuration:
+Initialization creates this layout:
 
 ```text
 DIR/
 ├── groundhog.toml
 └── data/
-    ├── log/
-    └── warehouse.duckdb
+    └── log/
 ```
 
-`groundhog.toml` is published last as the deployment commit point. An exact retry validates the
-existing deployment and succeeds without rewriting it. A different configuration, a non-empty
-log without committed configuration, a conflicting warehouse, unexpected entries in the owned
-data directory, symlinks, or special files are refused rather than overwritten.
+`groundhog.toml` is the deployment commit point and is written last.
+An exact retry validates the deployment and does not rewrite it.
 
-Standard output is empty. Standard error reports `initialized <DIR>` or
-`already initialized <DIR>`.
+The command refuses a non-empty log without committed configuration.
+It also refuses unexpected entries, symbolic links, and special files in paths that it owns.
+
+Groundhog does not create a warehouse file.
+It does not modify old warehouse files during an upgrade.
+
+Standard error reports `initialized <DIR>` or `already initialized <DIR>`.
 
 ```sh
 groundhog init ./instance
@@ -114,32 +116,32 @@ groundhog init ./instance
 groundhog serve [--config <PATH>]
 ```
 
-Acquires the log's single writer, opens the current published warehouse, and serves HTTP/1.1 over
-the configured Unix domain socket. It never opens a TCP listener.
+`serve` acquires the log writer and serves HTTP/1.1 over the configured Unix socket.
+It opens only the durable log.
+It never opens a TCP listener.
 
-The current routes are:
+The service provides these routes:
 
 | route | purpose |
 |---|---|
-| `POST /v1/events` | Atomic idempotent JSON batch ingest. |
-| `GET /v1/events` | Ordered replay from a coherent log snapshot. |
-| `POST /v1/query` | Confined read-only SQL against the published warehouse. |
-| `GET /v1/catalog` | Published stream metadata and receipt. |
+| `POST /v1/events` | Append an atomic, idempotent JSON batch. |
+| `GET /v1/events` | Replay events or follow new commits. |
+| `GET /v1/streams` | Enumerate authoritative streams from the log. |
+| `POST /v1/sources/retire` | Permanently retire one source. |
 
-If `[server].token` is non-empty, every request requires `Authorization: Bearer <token>`.
+If `[server].token` is not empty, every request needs `Authorization: Bearer <token>`.
 
-The process prints `serving <socket-path>` immediately before entering socket binding and the
-HTTP runtime. That line is not a readiness protocol; supervisors should wait for a successful
-routed request. A live or unclassifiable existing socket is left untouched. Only a socket proven
-stale is removed and rebound.
+The process reports `serving <socket-path>` before it starts the HTTP runtime.
+This message is not a readiness check.
+Supervisors must wait for a successful routed request.
 
-Replay sees committed log events immediately. Query and catalog see the last successful
-`project` or `rebuild`. A running service adopts a newly published complete warehouse between
-requests without restarting.
+A live or unclassified existing socket remains untouched.
+The process removes and replaces only a socket that it proves is stale.
 
-`SIGINT` or `SIGTERM` starts graceful shutdown. New work stops being admitted, queued mutations
-reach their real storage outcome, and then writer ownership is released. If a client loses an
-ingest response, it resolves the outcome by retrying identical content with the same batch ID.
+`SIGINT` or `SIGTERM` starts a graceful shutdown.
+The server stops new work and resolves queued mutations before it releases the writer.
+
+If an ingest response is lost, retry identical content with the same batch ID.
 
 ```sh
 groundhog serve --config ./instance/groundhog.toml
@@ -153,11 +155,10 @@ See [HTTP API](/references/http-api) and [Deployment operations](/operations/dep
 groundhog seal [--config <PATH>]
 ```
 
-Rotates the append tail and seals every uncovered pending generation into immutable Parquet
-segments. Sealing changes physical representation, not event values, IDs, order, batch
-commitments, or chain head.
+`seal` rotates the append tail into immutable Parquet segments.
+It does not change event values, IDs, order, batch commitments, or the chain head.
 
-`seal` needs writer ownership, so stop `serve` first. It does not refresh the warehouse.
+Stop `serve` before sealing because `seal` needs writer ownership.
 
 For each new segment, standard error reports:
 
@@ -165,7 +166,7 @@ For each new segment, standard error reports:
 sealed <path> (<events> events, head <chain-head>)
 ```
 
-An empty tail with nothing pending is exit 1 rather than a successful no-op.
+An empty tail with no pending work returns exit code 1.
 
 ```sh
 groundhog seal --config ./instance/groundhog.toml
@@ -173,65 +174,20 @@ groundhog seal --config ./instance/groundhog.toml
 
 See [Storage](/concepts/storage).
 
-## `project`
-
-```text
-groundhog project [--config <PATH>]
-```
-
-Captures one coherent log snapshot and publishes a complete warehouse generation containing
-`events`, `meta.streams`, and `meta.projection_state`. Publication currently performs a full
-recompute.
-
-Publication is atomic, so failure never displaces the last good generation. The command reads the
-log without owning its writer and may run while `serve` is active. Events appended after snapshot
-capture wait for the next publication.
-
-Standard output is empty. Standard error reports `projected <warehouse-path>`.
-
-```sh
-groundhog project --config ./instance/groundhog.toml
-```
-
-## `rebuild`
-
-```text
-groundhog rebuild [--config <PATH>]
-```
-
-Replays the complete captured log prefix into a replacement warehouse and publishes it atomically.
-Use it to prove reconstructability or replace missing, stale, or invalid derived state.
-
-`project` and `rebuild` currently both perform a full publication. Their intent differs: `project`
-advances normal query freshness, while `rebuild` explicitly treats the warehouse as disposable.
-
-`rebuild` may run while `serve` is active. Given the same log frontier and compatible build,
-repeated rebuilds produce the same logical relations and receipt; byte-identical DuckDB files are
-not promised.
-
-Standard output is empty. Standard error reports `rebuilt <warehouse-path>`.
-
-```sh
-groundhog rebuild --config ./instance/groundhog.toml
-```
-
-See [Warehouse](/concepts/warehouse).
-
 ## `verify`
 
 ```text
 groundhog verify [--chain] [--config <PATH>]
 ```
 
-Performs read-only analysis of one coherent log inventory. It never repairs or deletes files.
+`verify` analyzes one coherent log inventory without changing files.
 
-The default pass checks storage structure, segment file hashes and ranges, batch partitions and
-digests, pending generations, tail framing, event order, and durable idempotency commitments.
+The default pass checks storage structure, segment hashes, event ranges, batches, pending generations, tail framing, order, and idempotency commitments.
 
-`--chain` additionally recomputes every payload content hash, event hash, and the logical history
-chain from genesis. It is more expensive because it reads and hashes all event content.
+`--chain` also recomputes each content hash, event hash, and logical history-chain value.
+This option reads and hashes all event content.
 
-On exit 0 or exit 3, standard output contains exactly one JSON report:
+Exit code 0 or 3 writes one JSON report to standard output:
 
 ```json
 {
@@ -246,23 +202,12 @@ On exit 0 or exit 3, standard output contains exactly one JSON report:
 }
 ```
 
-`orphans` are recognized non-authoritative files. `remnants` are excluded incomplete final state
-that a compatible writer recovery may repair. Either list can be non-empty while verification
-succeeds.
+Verification recognizes `orphans` as non-authoritative files.
+`remnants` are incomplete state that compatible recovery can exclude or repair.
+Verification can succeed when either list is not empty.
 
-On exit 3, `failure` contains one stable code:
-
-```text
-manifest_invalid             segment_invalid
-pending_invalid              tail_invalid
-order_invalid                idempotency_invalid
-file_hash_mismatch           batch_commitment_mismatch
-content_hash_mismatch        event_hash_mismatch
-chain_head_mismatch
-```
-
-Operational, usage, and refusal exits produce no JSON report. `verify --clean` is not available;
-reported files are not permission for ad hoc deletion.
+Operational, usage, and refusal exits do not produce a JSON report.
+`verify --clean` is not available.
 
 ```sh
 groundhog verify --chain --config ./instance/groundhog.toml
@@ -270,10 +215,13 @@ groundhog verify --chain --config ./instance/groundhog.toml
 
 See [Verification and recovery](/operations/verification-and-recovery).
 
-## Unavailable commands
+## Removed and unavailable commands
 
-The binary does not accept CLI `import`, `query`, `catalog`, `erase-payload`, `export-key`, or
-`verify --clean`. Use the running HTTP API for ingest, replay, query, and catalog.
+Groundhog 0.2 does not accept `project` or `rebuild`.
+It does not provide a local SQL warehouse.
+
+The binary also rejects CLI `import`, `query`, `catalog`, `erase-payload`, `export-key`, and `verify --clean`.
+Use the HTTP API for ingest, replay, follow, stream enumeration, and source retirement.
 
 ## See also
 

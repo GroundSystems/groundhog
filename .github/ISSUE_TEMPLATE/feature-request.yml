@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose a change to Groundhog behavior or documentation.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe one request. Explain the user need before you describe a solution.
+  - type: textarea
+    id: current-workflow
+    attributes:
+      label: Current workflow
+      description: Describe the current steps and the limitation that you encounter.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the behavior that would meet the user need.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: State who would use this change and how often they need it.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Groundhog version
+      description: Enter the version if the request applies to a specific release.
+      placeholder: "groundhog 0.1.1"
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Select a platform if the request depends on one.
+      options:
+        - All platforms or not platform-specific
+        - macOS on Apple silicon
+        - Linux on x86-64
+        - Other
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Describe any workarounds or other solutions that you considered.

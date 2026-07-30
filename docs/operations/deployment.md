@@ -1,27 +1,30 @@
 ---
 title: Deployment operations
-description: Deploy, supervise, publish, maintain, and back up one Groundhog instance.
+description: Deploy, supervise, maintain, upgrade, and back up one Groundhog 0.2 instance.
 ---
 
 ## Name
 
-`groundhog-operations`: deploy, supervise, publish, maintain, and back up one instance.
+`groundhog-operations`: operate one durable event-log instance.
 
 ## Instance boundary
 
-One service instance owns one configured data directory. Exactly one process owns its log writer;
-clients communicate over the configured Unix socket.
+One service instance owns one configured data directory.
+One process owns its log writer.
+Clients communicate over the configured Unix socket.
 
-The same deployment may be supervised by an SDK/application or by launchd, systemd, or another
-operator process manager. Both use the same binary, configuration, socket, writer lock, recovery
-path, and HTTP contract.
+An SDK, application, launchd, systemd, or another process manager can supervise the deployment.
+Each option uses the same binary, configuration, socket, writer lock, recovery path, and HTTP contract.
 
-Groundhog is passive toward source systems. Connectors, schedulers, agents, and action
-executors run outside it and retain their own credentials and cursors.
+Groundhog does not contact source systems.
+Connectors and schedulers run outside it and keep their own credentials and source cursors.
+
+Derived-view consumers also run outside Groundhog.
+They use replay or follow to update their own databases and analytical systems.
 
 ## First deployment
 
-1. Initialize an empty directory:
+1. Initialize an empty directory.
 
    ```sh
    groundhog init /srv/ground/acme
@@ -29,170 +32,175 @@ executors run outside it and retain their own credentials and cursors.
 
 2. Review `/srv/ground/acme/groundhog.toml`, its token, and filesystem permissions.
 
-3. Start the service:
+3. Start the service.
 
    ```sh
    groundhog serve --config /srv/ground/acme/groundhog.toml
    ```
 
-4. Wait for a successful routed request, not merely a lifecycle log line:
+4. Wait for a successful routed request.
 
    ```sh
-   curl --unix-socket /srv/ground/acme/data/ground.sock http://ground/v1/catalog
+   curl --unix-socket /srv/ground/acme/data/ground.sock http://ground/v1/streams
    ```
 
 5. Configure connectors to submit stable idempotent batches to `POST /v1/events`.
 
+6. Configure consumers to replay or follow events and save durable cursors.
+
 ## Supervision
 
-Run `serve` as a foreground process. Let the supervisor own restart policy and capture standard
-error. Send `SIGTERM` for planned shutdown and allow the process to exit before starting a
-writer-owning maintenance command.
+Run `serve` as a foreground process.
+Let the supervisor own restart policy and standard-error capture.
 
-A supervisor should consider the instance ready only after a real authenticated routed request
-succeeds. Socket-path existence or the `serving ...` diagnostic alone is insufficient.
+Send `SIGTERM` for planned shutdown.
+Wait for exit before you start a command that needs the writer.
 
-If a bearer token is configured, health probes must include it. `GET /v1/catalog` verifies
-routing plus the currently published warehouse. A replay request can additionally exercise log
-reads when desired.
+A socket path or `serving ...` message does not prove readiness.
+Use a routed authenticated request.
+
+`GET /v1/streams?limit=1` checks routing and a coherent log read.
+Use a narrow finite replay when a probe must check a known event.
 
 ## Command concurrency
 
-| operation | log writer required | safe with live `serve` | changes warehouse |
-|---|---:|---:|---:|
-| ingest over HTTP | through server | yes | no |
-| replay over HTTP | no | yes | no |
-| `seal` | yes | no | no |
-| `project` | no | yes | atomically replaces |
-| `rebuild` | no | yes | atomically replaces |
-| `verify` | no | yes | no |
+| operation | log writer required | safe with live `serve` |
+|---|---:|---:|
+| ingest over HTTP | through the server | yes |
+| finite replay over HTTP | no | yes |
+| follow over HTTP | no | yes |
+| stream enumeration over HTTP | no | yes |
+| source retirement over HTTP | through the server | yes |
+| `seal` | yes | no |
+| `verify` | no | yes |
 
-Never try to work around a held writer by deleting `data/log/.lock`. Stop the owning process and
-wait for it to release the data directory.
+Do not delete `data/log/.lock` to bypass a held writer.
+Stop the owning process and wait for it to release the data directory.
 
-## Publication policy
+## Consumer policy
 
-The binary does not publish the warehouse automatically. Choose when query/catalog freshness
-should advance and
-run:
+Groundhog stores and serves the durable event log.
+Applications build derived views from replay or follow.
 
-```sh
-groundhog project --config /srv/ground/acme/groundhog.toml
-```
+A consumer must save its last applied event ID.
+Use one transaction for the derived-view update and cursor update when the target system supports it.
 
-The service may remain live. Publication captures one coherent frontier. Appends after snapshot
-capture appear in the next publication. Receipts identify the current warehouse frontier.
+Reconnect follow with the exclusive `after` cursor after shutdown or transport failure.
+Use finite replay to fill gaps before another follow session.
 
-Possible operator policies include:
-
-- after a known connector sync completes;
-- before a scheduled reporting or agent-analysis window;
-- from an external periodic scheduler; or
-- on demand when catalog/query freshness is required.
-
-Do not infer SQL freshness from service uptime. Compare the response receipt's
-`as_of_event_id` with replay/log progress appropriate to the application.
+Consumers must define their own rebuild procedure.
+That procedure starts from an empty derived view and replays the Groundhog log.
 
 ## Sealing policy
 
-Sealing is manual and does not run on configured age/size thresholds. A planned
-maintenance window is:
+Sealing is manual.
+Groundhog does not seal on configured age or size thresholds.
 
-1. stop `serve` with `SIGTERM` and wait for exit;
-2. run `groundhog seal`;
-3. optionally run `groundhog verify --chain`; and
-4. restart `serve` and probe a routed endpoint.
+Use this maintenance sequence:
 
-An empty tail makes `seal` exit 1. Treat that as “nothing to seal” only when the operator has
-independently established that no pending work is expected; the CLI intentionally does not turn
-it into success.
+1. Stop `serve` with `SIGTERM` and wait for exit.
+2. Run `groundhog seal`.
+3. Run `groundhog verify --chain` when the maintenance policy requires it.
+4. Restart `serve`.
+5. Probe a routed endpoint.
 
-Sealing has no effect on query freshness and does not require a subsequent rebuild for logical
-correctness.
+An empty tail makes `seal` return exit code 1.
+Treat this result as no work only when the operator expects no pending events.
 
-## Rebuilds
-
-Run `rebuild` to replace derived state or prove it can be reconstructed:
-
-```sh
-groundhog rebuild --config /srv/ground/acme/groundhog.toml
-```
-
-It may run while serving. Subsequent query/catalog requests adopt the new complete generation.
-For an operational proof, retain the pre/post receipts and compare logical query results, not
-DuckDB file bytes.
+Sealing creates immutable Parquet log segments.
+It does not change the logical event history.
 
 ## Verification cadence
 
-Structural verification is cheaper and useful for frequent checks:
+Structural verification supports frequent checks:
 
 ```sh
 groundhog verify --config /srv/ground/acme/groundhog.toml
 ```
 
-Deep chain verification reads and hashes all content and is appropriate for scheduled integrity
-checks, release/upgrade gates, backup validation, and restore drills:
+Deep verification reads and hashes all content:
 
 ```sh
 groundhog verify --chain --config /srv/ground/acme/groundhog.toml
 ```
 
-Capture the JSON report from standard output separately from standard-error diagnostics.
+Use deep verification for release gates, upgrade gates, backup validation, and restore drills.
+Store the JSON report from standard output separately from diagnostics.
 
 ## Monitoring
 
-Monitor:
+Monitor these signals:
 
-- process exit and restart loops;
-- routed API availability over the socket;
-- HTTP 429 overload and `Retry-After` behavior;
-- HTTP 503 writer-poisoned responses, which require reopen;
-- ingest 409 conflicts, which indicate batch-ID misuse;
-- query/catalog receipt age relative to the application's freshness requirement;
-- verification exit status and failure code; and
-- filesystem capacity for the durable log and warehouse publication.
+- process exits and restart loops
+- routed API availability over the socket
+- HTTP 429 responses and `Retry-After` behavior
+- HTTP 503 responses that require a new serving session
+- ingest 409 conflicts caused by batch ID or stream frontier misuse
+- follow terminal reasons and reconnect progress
+- consumer cursor age and derived-view processing delay
+- verification exit status and failure code
+- filesystem capacity for `data/log/`.
 
-Human standard-error text may change. Use exit codes, HTTP status, response structures, and
-receipts as stable automation inputs.
+Do not parse standard-error text for automation.
+Use exit codes, HTTP status, stable error codes, and typed response fields.
 
 ## Backups
 
-The log is the backup-critical artifact; the warehouse is rebuildable. The binary does not include a
-backup command or online-copy protocol.
+The durable log is the backup-critical artifact.
+Groundhog does not include a backup command or online-copy protocol.
 
-Coordinate a filesystem snapshot/copy so it captures a coherent log state. A conservative manual
-procedure stops the writer, copies configuration plus `data/log/`, restarts service, and validates
-the copy in an isolated restore drill. Do not point two writers at the same copied directory.
+A conservative manual procedure is:
 
-A useful restore drill:
+1. Stop the writer.
+2. Copy `groundhog.toml` and `data/log/`.
+3. Restart the service.
+4. Restore the copy to an isolated path.
+5. Run structural and chain verification.
+6. Serve the restore on an isolated socket.
+7. Compare known replay events, stream summaries, and receipts.
 
-1. restore to an isolated path;
-2. adjust only deployment-specific paths in the restored configuration if necessary;
-3. run structural and chain verification;
-4. run `rebuild` to construct a fresh warehouse; and
-5. serve on an isolated socket and compare receipts and known queries.
+Do not point two writers at the same original or copied directory.
 
-## Upgrades
+## Upgrade from 0.1
 
-Before replacing a binary:
+Before you replace the binary:
 
-- retain the previous pinned binary and a coherent backup;
-- inspect release notes for storage reader/writer floors;
-- run `verify --chain` with the current build;
-- stop the writer cleanly; and
-- start the new build against one deployment at a time and probe public routes.
+1. Keep the previous pinned binary and a coherent backup.
+2. Read the 0.2 release notes.
+3. Run `verify --chain` with the 0.1 build.
+4. Stop the writer cleanly.
+5. Remove the `[query]` section from `groundhog.toml`.
+6. Start Groundhog 0.2 against one deployment.
+7. Probe `GET /v1/streams` and a known replay request.
+8. Run `verify --chain` with Groundhog 0.2.
+9. Confirm that application consumers can rebuild or continue their derived views.
 
-A binary that cannot interpret or mutate a data directory refuses it. Do not bypass compatibility
-checks or edit storage metadata.
+Groundhog 0.2 ignores these old files:
+
+```text
+data/warehouse.duckdb
+data/warehouse.duckdb.wal
+data/warehouse.duckdb.publish.lock
+data/.warehouse.duckdb.candidate-*
+```
+
+The runtime does not open or delete them.
+Keep them during the first upgrade checks for a reversible deployment change.
+
+Delete them manually only after the new binary, log verification, backup, and consumers pass their checks.
+
+A binary that cannot interpret a data directory refuses it.
+Do not bypass compatibility checks or edit storage metadata.
 
 ## Security posture
 
-The binary runs locally in the operator's infrastructure. Protect the configuration, socket parent, data directory,
-backups, process account, and any operator-managed proxy. A bearer token protects API requests
-but does not encrypt owner-readable files or provide governed/locked operation.
+Groundhog runs in the operator's infrastructure.
+Protect the configuration, socket parent, data directory, backups, and process account.
 
-Do not expose the socket through a remote front door without adding transport security, access
-control, and operational limits appropriate to that boundary.
+A bearer token protects API requests.
+It does not encrypt owner-readable files or provide governed operation.
+
+Do not expose the socket through a remote service without suitable transport security, access control, and operational limits.
 
 ## See also
 

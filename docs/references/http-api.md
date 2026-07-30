@@ -1,85 +1,92 @@
 ---
 title: Groundhog HTTP API
-description: HTTP transport, authentication, routes, limits, errors, and retry behavior.
+description: Groundhog 0.2 transport, authentication, log routes, errors, and retry behavior.
 ---
 
 ## Name
 
-`groundhog-http`: v1 client API over a Unix domain socket.
+`groundhog-http`: the version 1 log API over a Unix domain socket.
+
+Groundhog stores and serves the durable event log.
+Applications build derived views from replay or follow.
 
 ## Transport
 
-The service speaks HTTP/1.1 over the Unix socket configured by `[server].socket`. It does not
-listen on TCP.
+The service speaks HTTP/1.1 over the Unix socket configured by `[server].socket`.
+It does not listen on TCP.
 
-HTTP/1.1 requires a `Host` header, but Groundhog ignores its value. With `curl`:
+HTTP/1.1 requires a `Host` header, but Groundhog ignores its value.
 
 ```sh
-curl --unix-socket data/ground.sock http://ground/v1/catalog
+curl --unix-socket data/ground.sock http://ground/v1/streams
 ```
 
-Request and response bodies are UTF-8 JSON. A body request accepts `Content-Type:
-application/json` or a missing content type. The optional `charset=utf-8` parameter is accepted.
-Other media types, parameters, or any `Content-Encoding` return 415 before the body is read.
+Request and response bodies use UTF-8 JSON unless a follow response uses NDJSON.
+
+A request body accepts `Content-Type: application/json` or no content type.
+Groundhog accepts the optional `charset=utf-8` parameter.
+Other parameters, media types, or content encodings return 415 before Groundhog reads the body.
 
 ## Authentication
 
-If `[server].token` is non-empty, every request must include:
+If `[server].token` is not empty, every request needs:
 
 ```text
 Authorization: Bearer <token>
 ```
 
-A missing or mismatched token returns:
+A missing or incorrect token returns:
 
 ```http
 HTTP/1.1 401 Unauthorized
 Content-Type: application/json
 
-{"error":"unauthorized"}
+{"error":"unauthorized","message":"The request does not have valid authorization."}
 ```
 
-Authorization happens before routing, admission, or body reading. When the configured token is
-empty, the authorization header is ignored.
+Authorization occurs before routing, admission, or body reading.
+Groundhog ignores the authorization header when the configured token is empty.
 
 ## Current routes
 
 | method | path | purpose |
 |---|---|---|
 | `POST` | `/v1/events` | Append an atomic JSON event batch. |
-| `GET`, `HEAD` | `/v1/events` | Replay a coherent log snapshot. |
-| `POST` | `/v1/query` | Run confined read-only SQL. |
-| `GET`, `HEAD` | `/v1/catalog` | Read the published catalog. |
+| `GET`, `HEAD` | `/v1/events` | Replay events or follow new commits. |
+| `GET`, `HEAD` | `/v1/streams` | Enumerate authoritative streams. |
+| `POST` | `/v1/sources/retire` | Permanently retire one source. |
 
-An unknown path returns 404. A known path with another method returns 405 and an `Allow` header.
-`HEAD` returns the same status and headers as `GET` with no body.
+An unknown path returns 404.
+A known path with another method returns 405 and an `Allow` header.
+`HEAD` returns the same status and headers as `GET` without a body.
+
+`POST /v1/query` and `GET /v1/catalog` are not routes in Groundhog 0.2.
+They return 404.
 
 ## Error documents
 
-Most errors use:
-
-```json
-{"error":"human-readable message"}
-```
-
-Per-event batch validation uses:
+Errors use a stable code and a separate message:
 
 ```json
 {
-  "errors": [
-    {"index": 3, "error": "record_key empty"}
-  ]
+  "error": "invalid_replay_request",
+  "message": "The request contains an invalid replay parameter."
 }
 ```
 
-Clients should match HTTP status and document structure rather than message wording.
+Clients must match `error` and HTTP status.
+They must not match `message` text.
 
-Repeated query parameters, duplicate JSON member names, and unknown body members are rejected.
-Control envelopes are bounded at 1 MiB. JSON ingest has its own larger bound.
+Some conflicts add typed top-level fields.
+Per-event validation adds an `errors` array with zero-based indexes, stable codes, and messages.
+
+Groundhog rejects repeated query parameters, duplicate JSON member names, and unknown body members.
+Control envelopes have a 1 MiB limit.
+JSON ingest has a separate 32 MiB limit.
 
 ## `POST /v1/events`
 
-Appends one atomic batch:
+Append one atomic batch:
 
 ```json
 {
@@ -98,16 +105,18 @@ Appends one atomic batch:
 }
 ```
 
-`v` defaults to 1 when omitted. `source` and `batch_id` are batch-level fields. A submitted event
-has exactly `stream`, `record_key`, `kind`, optional `occurred_at`, and `payload`.
+`v` defaults to 1.
+`source` and `batch_id` belong to the batch.
 
-The batch is rejected whole if any event is invalid. Empty batches are invalid. Limits are
-10,000 events and 32 MiB of encoded body.
+Each submitted event has `stream`, `record_key`, `kind`, optional `occurred_at`, and `payload`.
+Groundhog rejects the complete batch when any event is invalid.
+
+A batch contains 1 through 10,000 events and no more than 32 MiB of encoded JSON.
 
 ### Idempotency
 
-`(source, batch_id)` is reserved for the lifetime of the data directory. Groundhog computes a
-canonical digest from the submitted content before assigning server fields.
+`(source, batch_id)` identifies one batch for the life of the data directory.
+Groundhog computes a canonical digest before it assigns server fields.
 
 A new batch returns:
 
@@ -122,34 +131,43 @@ A new batch returns:
 ```
 
 An identical retry returns the original receipt with `status: "duplicate"` and writes nothing.
-Reusing the key for different content returns 409 and writes nothing.
+Different content with the same key returns 409 and writes nothing.
 
-A successful ingest receipt means the batch is durable. A lost response leaves the client
-uncertain; retrying identical content under the same key safely converges on one batch.
+A successful receipt means the complete batch is durable.
+Retry identical content with the same key after a lost response.
 
-### Naming and bounds
+### Optional stream precondition
 
-- `source`, `stream`, and ordinary name-like values are bounded and source/stream names match
-  `[a-z0-9_][a-z0-9_.-]*`;
-- `record_key` and `batch_id` must be non-empty;
-- source `system` is reserved;
-- submitted batch IDs beginning with `groundhog/` are reserved; and
-- `occurred_at`, when supplied, is UTC with a `Z` suffix.
+`stream_precondition` requires one stream to have an expected frontier before the batch commits.
+Every event in the batch must target that stream.
 
-See [Events](/concepts/events) for the full fixed event envelope.
+```json
+{
+  "stream_precondition": {
+    "stream": "customers",
+    "expected_frontier": "019c0000-0000-7000-8000-000000000001"
+  }
+}
+```
+
+Set `expected_frontier` to `null` to require a stream with no committed events.
+A mismatch returns `409 stream_frontier_conflict` and commits nothing.
 
 ## `GET /v1/events`
 
-Replays authoritative history in increasing `event_id` order:
+Finite replay returns authoritative history in increasing `event_id` order:
 
 ```text
-GET /v1/events?after=<event_id>&source=stripe&stream=customers&kind=upserted&limit=1000
+GET /v1/events?after=<event_id>&source=stripe&stream=customers&record_key=cus_9XKzR2&kind=upserted&limit=1000
 ```
 
-All parameters are optional and exact-match. `after` is exclusive. `limit` must be a positive
-integer no greater than `[replay].max_limit`; omission uses `[replay].default_limit`.
+All parameters are optional and use exact matches.
+`after` is exclusive.
 
-Response:
+`limit` must be positive and cannot exceed `[replay].max_limit`.
+Omission uses `[replay].default_limit`.
+
+A finite response has this shape:
 
 ```json
 {
@@ -174,126 +192,149 @@ Response:
 }
 ```
 
-`last_event_id` is the last matching event returned and is omitted on an empty match. It is not
-the progress cursor for a filtered subscription.
+`last_event_id` is the last matching event and is absent for an empty result.
+It is not the progress cursor for a filtered consumer.
 
-`next_after` is the position through which the request actually scanned. When the snapshot is
-exhausted it advances to the snapshot frontier even if no event matched. Persist it for the next
-poll so unrelated history cannot stall a filtered consumer.
+`next_after` is the last position that the request conclusively scanned.
+Persist it for the next finite poll.
 
-`snapshot_through_event_id` is the coherent frontier captured for this request, or `null` for an
-empty log.
+`snapshot_through_event_id` is the coherent frontier captured for the request.
+It is `null` only for an empty log.
 
-## `POST /v1/query`
+### Follow mode
 
-Executes one confined read-only statement against one pinned published warehouse generation:
+Add `follow=true` to receive the initial snapshot and later commits on one response.
 
-```json
-{
-  "sql": "SELECT source, count(*) AS events FROM events GROUP BY source ORDER BY source, events",
-  "format": "json",
-  "limit": 10000,
-  "timeout_secs": 30
-}
+```sh
+curl --no-buffer --unix-socket data/ground.sock \
+  'http://ground/v1/events?follow=true&source=stripe&stream=customers'
 ```
 
-`sql` is required. `format` defaults to `json`, the available result format. `limit` and
-`timeout_secs` default to configuration and must be positive and within their configured maxima.
+Follow uses `Content-Type: application/x-ndjson` and returns one JSON record per line.
+The response includes `Connection: close`.
 
-Success:
+The records have three forms:
 
-```json
-{
-  "columns": ["source", "events"],
-  "rows": [["stripe", 42]],
-  "truncated": false,
-  "receipt": {
-    "as_of_event_id": "...",
-    "chain_head": "...",
-    "groundhog_version": "0.1.0",
-    "storage_schema_version": 1,
-    "projections_hash": "..."
-  }
-}
-```
+- `events` records contain replay fields and a `phase` of `snapshot` or `live`.
+- A `caught_up` record marks the end of the initial snapshot.
+- An `end` record gives a terminal reason and the last delivered event ID.
 
-The query boundary allows one `SELECT` or `WITH` statement over published relations. It rejects
-mutations, multiple statements, file/network table functions, extension installation/loading,
-attach/copy/import/export, secrets, shell access, mutating pragmas/settings, volatile functions,
-and unproved order-dependent constructs.
+Terminal reasons are `shutdown`, `writer_poisoned`, `session_closed`, `buffer_exceeded`, and `replay_failed`.
+EOF without an `end` record is a transport failure.
 
-A result cut by the server row limit requires a total top-level `ORDER BY`. The order must cover
-all output columns; `ORDER BY ALL` is the simplest general form. Nested
-`LIMIT` or `OFFSET` blocks require the same proof. Without a total order, an over-limit result is
-rejected instead of returning an arbitrary subset.
+In follow mode, `limit` bounds each `events` record.
+It does not end the response.
 
-Queries execute only against the last published generation. Events appended after its receipt
-remain available through replay but are absent from SQL until `project` or `rebuild` publishes a
-new frontier.
+Persist each delivered event's `event_id`.
+Reconnect with `after=<last delivered event_id>` and the same filters.
 
-## `GET /v1/catalog`
+`follow=false` or an omitted `follow` returns one finite JSON response.
 
-Returns published stream-level metadata:
+## `GET /v1/streams`
+
+This route scans the durable log and returns source and stream summaries.
+It does not use derived state.
 
 ```text
-GET /v1/catalog?source=stripe&stream=customers
+GET /v1/streams?source=stripe&limit=100
 ```
 
-Both narrowing parameters are optional. Response:
+The optional parameters are `source`, `after`, `through`, and `limit`.
+Results use source order followed by stream order.
 
 ```json
 {
-  "receipt": {
-    "as_of_event_id": "...",
-    "chain_head": "...",
-    "groundhog_version": "0.1.0",
-    "storage_schema_version": 1,
-    "projections_hash": "..."
-  },
+  "v": 1,
   "streams": [
     {
       "source": "stripe",
       "stream": "customers",
-      "event_count": 42,
-      "first_observed_at": "...",
-      "last_observed_at": "...",
-      "kinds": ["deleted", "upserted"]
+      "frontier_event_id": "019c0000-0000-7000-8000-000000000001",
+      "event_count": 42
     }
-  ]
+  ],
+  "next_after": null,
+  "snapshot_through_event_id": "019c0000-0000-7000-8000-000000000001"
 }
 ```
 
-The receipt is from the same pinned warehouse generation as the stream list.
+Pages contain 100 rows by default and at most 1,000 rows.
+
+When `next_after` is not null, send it as `after` on the next request.
+Also send the first response's `snapshot_through_event_id` as `through`.
+Groundhog rejects `after` without `through`.
+
+The anchor excludes later commits, so all pages describe one logical stream snapshot.
+
+## `POST /v1/sources/retire`
+
+Permanently close one source to new batches:
+
+```json
+{
+  "v": 1,
+  "source": "stripe"
+}
+```
+
+The source must have at least one committed event.
+Operators cannot retire the reserved `system` source.
+
+A first success returns:
+
+```json
+{
+  "v": 1,
+  "status": "retired",
+  "source": "stripe",
+  "final_frontier": "019c0000-0000-7000-8000-000000000001",
+  "retirement_event_id": "019c0000-0001-7000-8000-000000000002"
+}
+```
+
+A repeat returns the same fields with `status: "already_retired"`.
+A new batch for the retired source returns `409 source_retired`.
+
+Retirement does not rename, delete, seal, or compact existing history.
+
+A successor can declare one retired predecessor in its first batch. The first submitted event uses
+stream `groundhog.source_lineage`, kind `source_succeeded`, and the predecessor as its record key.
+Its payload contains the predecessor source and exact retired frontier.
+
+Groundhog returns `400 invalid_source_lineage` for a malformed or misplaced marker. It returns
+`409 source_lineage_conflict` when the predecessor retirement or successor state conflicts.
 
 ## Common status codes
 
 | status | meaning |
 |---:|---|
 | 200 | Success, including a duplicate ingest receipt. |
-| 400 | Invalid request, batch, replay cursor, query, or SQL. |
-| 401 | Missing or incorrect configured bearer token. |
-| 404 | Unknown route. |
+| 400 | Invalid request, batch, event, replay, stream, or lifecycle input. |
+| 401 | Missing or incorrect bearer token. |
+| 404 | Unknown route or unknown source for retirement. |
 | 405 | Unsupported method on a known route. |
-| 408 | Query timeout completed and cancellation finished. |
-| 409 | Batch ID was already committed with different content. |
-| 413 | Request body or event count exceeded its bound. |
+| 409 | Batch identity, stream frontier, retirement, or lineage conflict. |
+| 413 | A body or event count exceeded its limit. |
 | 415 | Unsupported content type, parameter, or content encoding. |
-| 429 | Bounded admission was unavailable; inspect `Retry-After`. |
-| 503 | The writer is poisoned and must be reopened. |
+| 429 | Bounded admission was unavailable. Inspect `Retry-After`. |
+| 503 | The writer cannot accept mutations until the service reopens it. |
 
-A 429 rejected before mutation enqueue has written nothing and is retryable. Once mutation work
-is enqueued, it is not abandoned because the client disconnects. A 503 means the writer cannot
-accept further mutation until the service is closed and reopened through recovery.
+A 429 rejected before mutation queue admission writes nothing and is retryable.
+Queued mutations reach their real storage result after a client disconnects.
+
+A 503 means the writer cannot accept more mutations in this serving session.
+Restart the service before retrying.
 
 ## Unavailable forms
 
-The binary does not implement NDJSON streaming ingest, `POST /v1/imports`, observation ingest, or Arrow
-query results. Sending their media types, routes, or formats does not activate partial behavior.
+Groundhog 0.2 does not implement local SQL, `/v1/query`, or `/v1/catalog`.
+
+It also does not implement NDJSON ingest, `POST /v1/imports`, observation ingest, or a TCP listener.
+Sending these routes or media types does not activate partial behavior.
 
 ## See also
 
 [`serve`](/commands#serve),
 [configuration](/references/configuration),
 [events](/concepts/events),
-[warehouse](/concepts/warehouse),
 [getting started](/guides/getting-started)

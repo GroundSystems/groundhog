@@ -1,6 +1,6 @@
 ---
 title: Verification and recovery
-description: Verify a deployment and respond safely to startup, storage, and integrity failures.
+description: Verify a deployment and respond to startup, storage, and integrity failures.
 ---
 
 ## Name
@@ -9,143 +9,148 @@ description: Verify a deployment and respond safely to startup, storage, and int
 
 ## Principles
 
-Recovery never guesses. The binary opens a data directory only when it can identify one
-authoritative durable history. Ambiguous or contradictory state is refused.
+Groundhog opens a data directory only when it can identify one authoritative durable history.
+It refuses ambiguous or contradictory state.
 
-Read-only commands do not repair data. Opening the directory for writing may complete recognized
-interrupted final writes before accepting new mutation. Verification is always read-only.
+Read-only commands do not repair data.
+A writer open can finish recognized interrupted writes before it accepts new mutations.
+
+Verification is always read-only.
 
 ## Ordinary open analysis
 
-Every open checks enough stored state to establish:
+Every open checks these stored facts:
 
-- a compatible storage format;
-- one coherent committed history frontier;
-- strictly ordered event ranges; and
+- a compatible storage format
+- one coherent committed history frontier
+- strictly ordered event ranges
 - consistent durable `(source, batch_id)` commitments.
 
-If an interrupted final write can be safely excluded or completed, a writer open recovers it
-before serving. Conflicting complete records or representations are not silently discarded.
+A writer can exclude or finish a recognized interrupted final write.
+Groundhog does not discard conflicting complete records or representations.
 
 ## Structural verification
 
-`groundhog verify` performs a thorough stored-history check:
+`groundhog verify` checks stored history:
 
-- SHA-256 of each authoritative segment file;
-- actual Parquet row count and exact first/last event-ID range;
-- strict row order within each segment;
-- exact partition of segment rows by recorded batches;
-- recomputation of batch digests from stored event commitments; and
-- the corresponding pending/tail facts from the captured inventory.
+- the SHA-256 digest of each authoritative segment
+- the Parquet row count and exact event-ID range
+- strict row order in each segment
+- exact segment partitioning by recorded batch
+- batch digests recomputed from event commitments
+- matching pending and tail facts in the captured inventory.
 
-It also reports recognized orphans and repairable remnants without changing them.
+The report also lists recognized orphans and repairable remnants without changing them.
 
 ## Chain verification
 
-`groundhog verify --chain` additionally recomputes, for every event:
+`groundhog verify --chain` also recomputes these values for each event:
 
-1. `content_hash` from canonical payload JSON;
-2. `event_hash` from the canonical fixed envelope; and
-3. the ordered logical chain from the fixed genesis head.
+1. `content_hash` from canonical payload JSON.
+2. `event_hash` from the canonical fixed envelope.
+3. The ordered logical chain from the fixed genesis head.
 
-It compares chain heads at required boundaries and at the captured frontier. This detects payload
-or envelope alteration, insertion, removal, or reordering inside the available history.
+It compares chain heads at required boundaries and the captured frontier.
+This check detects available-history alteration, insertion, removal, or reordering.
 
-Local chain consistency does not prove that someone controlling the entire directory did not
-replace it coherently. External signed, mirrored, and witnessed anchors are not supported.
+Local chain consistency does not prove that an owner did not replace the complete directory coherently.
+Groundhog 0.2 does not support external anchors.
 
 ## Reports and exit status
 
-On conclusive verification success or failure, parse the standard-output JSON report. Exit 0
-means requested checks passed; exit 3 means a stable failure code identifies the first conclusive
-violation.
+Exit code 0 means the requested checks passed.
+Exit code 3 means a stable failure code identifies the first conclusive violation.
 
-Exit 1 means the operation could not establish a conclusive verification result because of an
-operational error. Exit 2 is invalid arguments/configuration. Exit 4 is a recognized but
-unsupported compatibility, security, or anchor requirement.
+Both results include one JSON report on standard output.
 
-Do not collapse exits 1, 3, and 4 into one “bad log” state; they require different operator
-responses.
+Exit code 1 identifies an operational error without a conclusive verification result.
+Exit code 2 identifies invalid arguments or configuration.
+Exit code 4 identifies an unsupported compatibility, security, or anchor requirement.
+
+These results require different operator actions.
+Do not treat them as one corrupt-log result.
 
 ## Orphans and remnants
 
-An **orphan** is recognized non-authoritative storage, such as an unreferenced segment or private
-temporary. It is inventoried but not verified.
+Verification classifies an **orphan** as non-authoritative storage.
+Examples include an unreferenced segment or private temporary file.
 
-A **remnant** is excluded incomplete final state that a compatible writer recovery may repair.
+A **remnant** is incomplete final state that compatible writer recovery can exclude or repair.
 
-Either list may be non-empty while verification succeeds. Their classification is evidence, not
-permission for ad hoc deletion. `verify --clean` is not available.
+Verification can succeed with either list populated.
+The classification does not authorize deletion.
+`verify --clean` is not available.
 
 ## Writer poisoning
 
-If a write fails in a way that leaves its outcome uncertain, the active writer stops accepting
-mutation:
+The active writer stops mutation after a write failure with an uncertain outcome.
 
-- the triggering HTTP request fails or loses a definitive result;
-- later mutation requests return 503;
-- no further append is accepted through that writer; and
-- the service must close and reopen the directory through normal recovery.
+- The triggering request fails or loses a definitive result.
+- Later mutation requests return 503.
+- The active writer accepts no more appends.
+- The service must close and reopen the directory through normal recovery.
 
-Clients resolve the original batch outcome only after reopen by retrying identical content under
-the same idempotency key. Recovery either finds the committed batch and returns `duplicate`, or
-finds no commitment and appends it once.
+After reopen, retry the original batch with the same key and content.
+Recovery returns the existing receipt or commits the batch once.
 
-## Operator runbook: verification failure
+## Operator procedure: verification failure
 
-When `verify` exits 3:
+When `verify` returns exit code 3:
 
-1. stop mutation and preserve the JSON report plus standard-error diagnostics;
-2. stop the live writer cleanly if it is still running;
-3. preserve a filesystem-level copy of the affected directory before experimentation;
-4. record the binary build identity and configuration used;
-5. do not edit storage files, delete orphans, or rebuild over the only copy;
-6. classify the stable failure code and compare with a known coherent backup; and
-7. restore or investigate on an isolated copy.
+1. Stop mutations.
+2. Preserve the JSON report and standard-error diagnostics.
+3. Stop the live writer cleanly.
+4. Preserve a filesystem copy before experimentation.
+5. Record the binary identity and configuration.
+6. Do not edit storage files or delete reported files.
+7. Classify the stable failure code.
+8. Compare the result with a known coherent backup.
+9. Restore or investigate on an isolated copy.
 
-`rebuild` is not a repair for a corrupt log. It repairs only the disposable warehouse and depends
-on a readable authoritative log.
+A consumer rebuild cannot repair a corrupt Groundhog log.
+It depends on readable authoritative history.
 
-## Operator runbook: crash or poisoned writer
+## Operator procedure: crash or poisoned writer
 
-After a crash or HTTP 503 writer-unavailable state:
+After a crash or HTTP 503 response:
 
-1. stop the old process and confirm it no longer owns the socket/writer;
-2. restart `serve` with the same configuration, allowing writer recovery to run;
-3. probe a routed endpoint;
-4. retry any ambiguous ingest with identical `(source, batch_id, content)`; and
-5. run `verify`, escalating to `verify --chain` when the event requires deeper evidence.
+1. Stop the old process.
+2. Confirm that it no longer owns the socket or writer.
+3. Restart `serve` with the same configuration.
+4. Probe `GET /v1/streams` or a known replay request.
+5. Retry ambiguous ingest with identical source, batch ID, and content.
+6. Run `verify`.
+7. Run `verify --chain` when the incident needs deeper evidence.
 
-Do not remove `.lock`; confirm the old process has exited and let the binary reopen the directory.
+Do not remove `.lock`.
+Let Groundhog reopen the directory through its recovery path.
 
-## Operator runbook: invalid warehouse
+## Old warehouse files
 
-If the log verifies but query/catalog cannot open the disposable warehouse:
+Groundhog 0.2 ignores old warehouse files.
+Their presence does not identify a log failure.
 
-```sh
-groundhog rebuild --config /path/to/groundhog.toml
-```
-
-The replacement is atomically published. If a service already holds a valid old generation, it
-may remain live and adopts the replacement between requests. If service startup
-itself cannot open the only warehouse, rebuild first, then start it.
+Do not delete them as part of log recovery.
+Remove them only after the 0.2 upgrade passes verification, backup, and application checks.
 
 ## Restore validation
 
-A restored directory is not proven merely because files exist. In an isolated location:
+File presence does not prove a valid restore.
+Use an isolated directory:
 
 ```sh
 groundhog verify --config ./restored/groundhog.toml
 groundhog verify --chain --config ./restored/groundhog.toml
-groundhog rebuild --config ./restored/groundhog.toml
+groundhog serve --config ./restored/groundhog.toml
 ```
 
-Then serve it on an isolated socket and compare known query results and receipts. Keep the restore
-test from contacting production clients or sharing a writer path.
+Serve the restore on an isolated socket.
+Compare known replay events, stream counts, stream frontiers, and ingest receipts.
+
+Do not connect the restore to production clients or share a writer path.
 
 ## See also
 
 [`verify`](/commands#verify),
-[`rebuild`](/commands#rebuild),
 [storage](/concepts/storage),
 [deployment operations](/operations/deployment)

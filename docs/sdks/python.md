@@ -1,41 +1,37 @@
 ---
 title: Python SDK
-description: Install and use the M1 groundhog-sdk Python client for ingest, replay, query, and catalog access.
+description: Install and use groundhog-sdk 0.2 for ingest, replay, and stream enumeration.
 ---
 
-The `groundhog-sdk` package is the synchronous Python client for the Groundhog v1 public API. It
-connects to a running `groundhog` process over a Unix domain socket. Each SDK operation maps to
-one public HTTP operation; durability, ordering, idempotency, and query confinement remain
-Groundhog responsibilities.
+The `groundhog-sdk` package is the synchronous Python client for the Groundhog version 1 HTTP API.
+Version 0.2 supports Unix sockets and HTTPS.
+
+Each SDK operation maps to one public HTTP operation.
+Groundhog remains responsible for durability, order, idempotency, and authoritative stream state.
+
+The SDK does not provide local SQL or derived views.
 
 ## Requirements
 
-- Python 3.10 or newer.
-- A running M1-compatible `groundhog serve` process.
-- Access to its Unix socket and, when configured, its bearer token.
+- Python 3.10 or newer
+- A running Groundhog 0.2 service
+- Access to its Unix socket or HTTPS endpoint
+- Its bearer token when authentication is active
 
-The M1 SDK does not install, start, stop, or supervise Groundhog. Initialize and serve the
-deployment separately:
-
-```sh
-groundhog init ./demo
-groundhog serve --config ./demo/groundhog.toml
-```
+The SDK does not install, start, stop, or supervise Groundhog.
 
 ## Installation
 
-Install the published distribution from PyPI:
+Install the 0.2 release from PyPI:
 
 ```sh
-python -m pip install groundhog-sdk
+python -m pip install 'groundhog-sdk>=0.2,<0.3'
 ```
 
-The distribution is named `groundhog-sdk`; Python code imports `groundhog_sdk`.
+The PyPI distribution name is `groundhog-sdk`.
+Python code imports `groundhog_sdk`.
 
-For local development, install from a checkout of the SDK repository with
-`python -m pip install .`.
-
-## Connect
+## Connect through a Unix socket
 
 ```python
 from groundhog_sdk import Ground
@@ -43,41 +39,62 @@ from groundhog_sdk import Ground
 ground = Ground("unix:demo/data/ground.sock")
 ```
 
-`Ground` accepts:
+The SDK accepts absolute and relative socket paths:
+
+```text
+unix:/var/run/groundhog.sock
+unix:demo/data/ground.sock
+```
+
+The default endpoint is `unix:data/ground.sock`.
+
+## Connect through HTTPS
 
 ```python
-Ground(
-    endpoint=None,
-    token=None,
-    *,
-    timeout=30.0,
-    max_retries=3,
+from groundhog_sdk import Ground
+
+ground = Ground(
+    "https://groundhog.example.com",
+    token="service-token",
 )
 ```
 
-`endpoint` must use the `unix:` scheme. `unix:/absolute/path/ground.sock` and
-`unix:relative/path/ground.sock` are both accepted. With no explicit endpoint, the client uses
-`GROUND_URL`, then `unix:data/ground.sock`. With no explicit token, it uses `GROUND_TOKEN`.
-Explicit arguments take precedence over environment variables.
+The HTTPS transport uses standard certificate and hostname verification.
+An endpoint can include a port and base path.
 
-```sh
-export GROUND_URL="unix:demo/data/ground.sock"
-export GROUND_TOKEN="replace-with-a-secret"
+```text
+https://groundhog.example.com:8443/service
 ```
+
+Groundhog itself listens only on a Unix socket.
+An operator-managed HTTPS service must forward the version 1 routes.
+
+## Explicit transport settings
+
+Use `TransportConfig` to keep the endpoint and timeout in one value:
 
 ```python
-ground = Ground()
+from groundhog_sdk import Ground, TransportConfig
+
+transport = TransportConfig(
+    "https://groundhog.example.com",
+    timeout=10,
+)
+ground = Ground(transport=transport, token="service-token")
 ```
 
-`timeout` is the transport timeout in seconds. `max_retries` is the number of attempts after the
-initial request when a connection fails or Groundhog refuses admission with HTTP 429. Ingest
-also retries a temporarily unavailable writer with capped exponential backoff. A 429 response's
-`Retry-After` value is honored.
+`Ground` also reads `GROUND_URL` and `GROUND_TOKEN`.
+Explicit arguments take precedence over environment variables.
+
+`max_retries` sets the number of attempts after the first request.
+The default is 3.
+
+The SDK retries connection failures and HTTP 429 responses.
+Ingest also retries HTTP 503 responses with bounded exponential delays.
 
 ## Build events
 
-The constructors produce exactly the connector-owned event fields. Payload values are retained
-without reshaping.
+The event constructors produce the connector-owned fields:
 
 ```python
 from groundhog_sdk import deleted, native, upserted
@@ -103,10 +120,8 @@ paid = native(
 )
 ```
 
-The SDK validates stream names, non-empty record keys and kinds, UTF-8 byte limits, UTC
-`occurred_at` syntax, calendar dates, JSON-serializable payload values, finite numbers, malformed
-Unicode, and the payload nesting limit before sending. Groundhog performs the authoritative
-validation.
+The SDK validates names, keys, kinds, times, payloads, finite numbers, Unicode, and nesting before sending.
+Groundhog performs authoritative validation.
 
 ## Ingest an atomic batch
 
@@ -117,28 +132,24 @@ receipt = ground.send(
     batch_id="stripe/customers/page-1",
 )
 
-print(receipt.status)          # "committed" or "duplicate"
+print(receipt.status)
 print(receipt.batch_digest)
 print(receipt.events)
 print(receipt.first_event_id)
 print(receipt.last_event_id)
 ```
 
-`send(source, events, batch_id)` maps to one JSON `POST /v1/events` request. A batch must contain
-between 1 and 10,000 events and its encoded body must not exceed 32 MiB. `source` follows the
-Groundhog source-name grammar; `system` is reserved. `batch_id` must be non-empty, at most 256
-UTF-8 bytes, and must not begin with the reserved `groundhog/` prefix.
+`send(source, events, batch_id)` maps to `POST /v1/events`.
+A batch contains 1 through 10,000 events and no more than 32 MiB.
 
-The entire batch is buffered and encoded once before the first attempt. If the connection closes
-before a response arrives, the SDK retries those identical bytes with the same `(source,
-batch_id)`. The result converges to one durable batch:
+The SDK encodes the complete batch once before its first attempt.
+A retry sends identical bytes with the same `(source, batch_id)`.
 
-- `committed` means this request durably appended the batch;
-- `duplicate` means identical content was already durable and is equally safe;
-- `IdempotencyConflict` means the batch ID was already committed with different content and is
-  never retried.
+- `committed` means the request durably appended the batch.
+- `duplicate` means identical content already committed.
+- `IdempotencyConflict` means the key identifies different committed content.
 
-Advance a source cursor only after receiving a `BatchReceipt` with either successful status.
+Advance a source cursor only after a successful `BatchReceipt`.
 
 ## Replay events
 
@@ -157,119 +168,108 @@ for event in page.events:
 cursor = page.next_after
 ```
 
-`events()` maps to one `GET /v1/events` request. Returned events are full fixed-column event
-objects in authoritative `event_id` order. All arguments are optional. Filters are exact matches,
-and `after` is exclusive.
+`events()` maps to one finite `GET /v1/events` request.
+It returns full events in authoritative `event_id` order.
 
-Persist `next_after`, not `last_event_id`, as the next scan cursor. A filtered page can contain no
-matching events while still advancing `next_after` past unrelated history. The other page fields
-are:
+Filters use exact matches and `after` is exclusive.
+Persist `next_after` for the next finite request.
+
+`EventPage` contains:
 
 | field | meaning |
 |---|---|
-| `events` | Matching full event objects returned by this request. |
-| `last_event_id` | Last matching event, or `None` when none matched. |
+| `events` | Matching event objects. |
+| `last_event_id` | The last matching event, or `None`. |
 | `next_after` | Durable scan progress for the next request. |
-| `snapshot_through_event_id` | Log frontier captured for this replay request. |
+| `snapshot_through_event_id` | The captured global log frontier. |
 
-The M1 client returns one page per call; it does not provide `follow` or persistent cursor
-storage.
+The 0.2 SDK returns one finite page per call.
+It does not provide a follow iterator or persistent cursor storage.
 
-## Query a published snapshot
+Use the HTTP API directly when a Python application needs continuous follow.
 
-```python
-result = ground.query(
-    "select source, count(*) as n "
-    "from events group by source order by source, n",
-    limit=10_000,
-    timeout_secs=30,
-)
-
-print(result.columns)
-for row in result.rows:
-    print(row)
-
-print(result.truncated)
-print(result.receipt.as_of_event_id)
-print(result.receipt.chain_head)
-```
-
-`query(sql, limit=None, timeout_secs=None)` maps to one JSON `POST /v1/query` request. The SDK
-always requests the M1 JSON result form. The server accepts one confined read-only `SELECT` or
-`WITH` statement and owns SQL validation, row limits, deterministic ordering requirements, and
-timeouts.
-
-`QueryResult` contains `columns`, array-shaped `rows`, the mandatory `truncated` flag, and a
-`SnapshotReceipt`. Every relation read by one query comes from the warehouse generation named by
-that receipt:
-
-| receipt field | meaning |
-|---|---|
-| `as_of_event_id` | Published log frontier, or `None` for the empty generation. |
-| `chain_head` | Integrity-chain head at that frontier. |
-| `groundhog_version` | Binary version that published the generation. |
-| `storage_schema_version` | Storage schema used by the generation. |
-| `projections_hash` | Identity of the projection set. |
-
-Replay reads the durable log immediately, while query reads the last published warehouse. Run
-`groundhog project` or `groundhog rebuild` to publish newly ingested events. A live
-`groundhog serve` process adopts a successful publication between requests.
-
-## Read the catalog
+## Enumerate streams
 
 ```python
-catalog = ground.catalog(source="stripe", stream="customers")
+page = ground.streams(source="stripe", limit=100)
 
-for item in catalog.streams:
-    print(item["source"], item["stream"], item["event_count"])
-
-print(catalog.receipt.as_of_event_id)
+for item in page.streams:
+    print(
+        item.source,
+        item.stream,
+        item.event_count,
+        item.frontier_event_id,
+    )
 ```
 
-`catalog(source=None, stream=None)` maps to one `GET /v1/catalog` request. Both exact-match
-filters are optional. `CatalogResult.streams` contains the published stream-level metadata, and
-`CatalogResult.receipt` identifies the same coherent warehouse snapshot used to render it.
+`streams()` maps to `GET /v1/streams`.
+It returns typed `Stream` values in a `StreamPage`.
+
+Each row reports authoritative state from the durable log.
+It does not report a derived catalog snapshot.
+
+For another page, use one anchored snapshot:
+
+```python
+if page.next_after is not None:
+    next_page = ground.streams(
+        source="stripe",
+        after=page.next_after,
+        through=page.snapshot_through_event_id,
+        limit=100,
+    )
+```
+
+Use the same source filter on each page.
+`after` requires the first page's `snapshot_through_event_id` as `through`.
+
+## Build derived views
+
+Groundhog stores and serves the durable event log.
+Applications build their own derived views from replay.
+
+A Python consumer normally applies each event and saves its event ID in the same database transaction.
+It can rebuild the view by replaying the log from the start.
+
+The SDK does not include a database adapter, SQL engine, or current-state model.
 
 ## Errors
 
-All SDK exceptions derive from `GroundError` and retain the server's message. Server-originated
-errors also expose `status` and the decoded JSON `body`.
+All SDK exceptions derive from `GroundError`.
+Remote errors expose these attributes:
+
+| attribute | meaning |
+|---|---|
+| `status` | The HTTP status. |
+| `code` | The stable server error code. |
+| `message` | The descriptive error text. |
+| `body` | The complete decoded response. |
+
+Use `code`, not `message`, for program control.
+The server can change descriptive text without changing its contract.
 
 | exception | meaning |
 |---|---|
-| `ValidationError` | Local request validation failed, or Groundhog returned HTTP 400/413. |
-| `IdempotencyConflict` | HTTP 409: the same `(source, batch_id)` names different content. |
-| `QueryError` | The query endpoint rejected or failed the statement, retaining its message. |
+| `ValidationError` | Local validation failed, or Groundhog returned HTTP 400 or 413. |
+| `IdempotencyConflict` | The batch key identifies different committed content. |
 | `ConnectionError` | No complete response arrived within the configured attempts. |
 | `GroundError` | Another server failure or an invalid server response. |
 
-Per-event validation details are available through `ValidationError.errors`:
+`ValidationError.errors` contains indexed event errors when the server provides them.
+Local errors and responses from old servers can have `code` set to `None`.
 
-```python
-from groundhog_sdk import ValidationError
+## Current 0.2 surface
 
-try:
-    ground.send("stripe", events, "stripe/page-1")
-except ValidationError as error:
-    for failure in error.errors:
-        print(failure["index"], failure["error"])
-```
-
-An idempotency conflict and a validation failure are final. A lost response has an unknown
-outcome, so the SDK resolves it only by retrying the identical buffered batch.
-
-## Current M1 surface
-
-The Python package currently exports:
+The package exports:
 
 ```text
-Ground
+Ground, TransportConfig
 upserted, deleted, native
-BatchReceipt, EventPage, QueryResult, CatalogResult, SnapshotReceipt
-GroundError, ValidationError, IdempotencyConflict, QueryError, ConnectionError
+BatchReceipt, EventPage, Stream, StreamPage
+GroundError, ValidationError, IdempotencyConflict, ConnectionError
 PROTOCOL_VERSION
 ```
 
-M1 intentionally does not include NDJSON streaming, server-local imports, automatic ingest-form
-selection, `follow`, persistent cursor helpers, async parity, Arrow or DataFrame adapters,
-connector management, or Groundhog installation and process supervision.
+Version 0.2 removes `Ground.query()`, `Ground.catalog()`, `QueryResult`, `CatalogResult`, `SnapshotReceipt`, and `QueryError`.
+
+The package does not include follow, persistent cursors, async parity, connector management, or Groundhog process supervision.

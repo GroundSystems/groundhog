@@ -1,167 +1,129 @@
 ---
 title: groundhog(1)
-description: CLI synopsis, global options, command index, streams, and exit status.
+description: Groundhog 0.2 CLI synopsis, options, commands, streams, and exit status.
 ---
 
 ## Name
 
-`groundhog`: maintain a Groundhog append-only event log and its embedded analytical warehouse.
+`groundhog`: maintain and serve a durable append-only event log.
 
 ## Synopsis
 
 ```text
 groundhog [--config <PATH>] <COMMAND>
-groundhog --help
-groundhog --version
-```
-
-Current commands:
-
-```text
-groundhog init [DIR] [--config <PATH>]
-groundhog serve [--config <PATH>]
-groundhog seal [--config <PATH>]
-groundhog project [--config <PATH>]
-groundhog rebuild [--config <PATH>]
-groundhog verify [--chain] [--config <PATH>]
+groundhog init [DIR]
+groundhog serve
+groundhog seal
+groundhog verify [--chain]
 ```
 
 ## Description
 
-`groundhog` is the Groundhog binary containing a durable event log, a rebuildable DuckDB
-warehouse, a Unix-socket HTTP service, and operator lifecycle commands. Connectors and applications use the
-HTTP interface; operators use the CLI to initialize, serve, publish, maintain, and verify one
-deployment.
+`groundhog` is one local binary with a durable event log and a Unix-socket HTTP service.
+Connectors append source changes.
+Applications replay events, follow new commits, enumerate streams, and build their own derived views.
 
-One deployment is selected by `groundhog.toml`. Its log is the durable truth. The warehouse is
-derived state that may lag the log and can be replaced by replaying it.
+One `groundhog.toml` file selects a deployment.
+The event log is the durable record and uses storage schema version 1.
 
-The current binary runs locally in the operator's infrastructure. It enforces only security mode `open`.
-Operations that would extend or attest history support integrity anchor `none`; they refuse a
-stronger configured anchor requirement.
+## Global option
 
-## Global options
+`--config <PATH>` selects the configuration file.
+The default is `./groundhog.toml`.
 
-### `--config <PATH>`
-
-Selects the instance configuration. The default is `./groundhog.toml`.
-
-The option is global and may appear before or after the subcommand. Every command except `init`
-loads it. Relative paths inside the file resolve against the configuration file's directory.
-
-`init` accepts the option because it is global, but ignores its value and writes
-`<DIR>/groundhog.toml`.
-
-### `-h`, `--help`
-
-Print top-level or command-specific help and exit 0.
-
-### `-V`, `--version`
-
-Print the package version and exit 0. A release build may include a stamped source revision as
-`<version>+<revision>`.
+Every command except `init` loads this file.
+`init` accepts the global option but writes `<DIR>/groundhog.toml` instead.
 
 ## Commands
 
 | command | purpose |
 |---|---|
-| [`init [DIR]`](/commands#init) | Create or validate an immediately serveable deployment. |
-| [`serve`](/commands#serve) | Run the ingest, replay, query, and catalog service. |
-| [`seal`](/commands#seal) | Seal the append tail into immutable segments. |
-| [`project`](/commands#project) | Publish a fresh warehouse generation. |
-| [`rebuild`](/commands#rebuild) | Reconstruct the disposable warehouse from the log. |
-| [`verify [--chain]`](/commands#verify) | Verify storage and optionally the integrity chain. |
+| [`init`](/commands#init) | Create or validate a deployment. |
+| [`serve`](/commands#serve) | Serve the log API over a Unix socket. |
+| [`seal`](/commands#seal) | Move the append tail into immutable Parquet segments. |
+| [`verify`](/commands#verify) | Check storage and optional chain integrity. |
 
-The cohesive [commands reference](/commands) owns command behavior, concurrency, output,
-exit status, and examples.
+Groundhog 0.2 removes `project` and `rebuild`.
 
-## Ownership and concurrency
+## Ownership
 
-| command | deployment access | may run while `serve` is active |
+| command | log access | can run with live `serve` |
 |---|---|---:|
-| `init` | creates or validates owned paths | no |
-| `serve` | log writer and public socket owner | it is the server |
-| `seal` | log writer | no |
-| `project` | coherent log reader; warehouse publisher | yes |
-| `rebuild` | coherent log reader; warehouse publisher | yes |
-| `verify` | coherent read-only log analysis | yes |
+| `init` | creates or validates | no |
+| `serve` | writer | it is the service |
+| `seal` | writer | no |
+| `verify` | coherent reader | yes |
 
-Only `serve` and `seal` mutate the log in the current CLI. They never bypass the one-writer rule.
-`project` and `rebuild` coordinate with a separate warehouse-publication lock and publish complete
-files atomically. A query already in progress remains pinned to its original generation.
+Only one process can own the writer.
 
 ## Standard streams
 
-Human lifecycle output and diagnostics go to standard error. Its exact wording and line count are
-not stable interfaces.
+Lifecycle output and diagnostics use standard error.
+`verify` writes its machine-readable JSON report to standard output.
 
-`init`, `serve`, `seal`, `project`, and `rebuild` have no machine-readable standard output.
-`verify` writes exactly one JSON document to standard output on exit 0 or exit 3. Help and version
-requests also use standard output.
-
-Automation should use exit status, parse only documented standard-output documents, and treat
-standard error as human context.
+`init`, `serve`, and `seal` have no machine-readable standard output.
+Help and version requests write to standard output and exit successfully.
 
 ## Exit status
 
-| code | class | meaning |
-|---:|---|---|
-| 0 | success | The command completed; every requested verification check passed. |
-| 1 | operational | I/O, permission, engine, held-lock, batch-conflict, or corrupt-state open failure. |
-| 2 | usage | Arguments or configuration are unusable; deployment work was not attempted. |
-| 3 | verification | `verify` conclusively found a violation and emitted its JSON report. |
-| 4 | refusal | The operation is deliberately unavailable for the security mode, anchor, capability, or compatible format. |
+| code | meaning |
+|---:|---|
+| 0 | Success. |
+| 1 | Operational failure. |
+| 2 | Invalid arguments or configuration. |
+| 3 | A verified storage or integrity violation. |
+| 4 | An unsupported mode, anchor, capability, or format. |
 
-Configuration errors are usage failures because validation happens before deployment state is
-opened. A malformed storage format found by `verify` is exit 3; a non-verification command that
-cannot open corrupt state is operational exit 1. Exit 4 is for a structurally classifiable but
-unsupported capability or compatibility state.
+## Files
+
+| path | purpose |
+|---|---|
+| `groundhog.toml` | Deployment configuration. |
+| `[data].dir/log/` | Durable append-only event log. |
+| `[server].socket` | Unix domain socket while `serve` runs. |
+
+Groundhog 0.2 does not create or open `warehouse.duckdb`.
+It ignores warehouse files left by Groundhog 0.1.
 
 ## Configuration
 
-`groundhog.toml` controls the data directory, security mode, anchor requirement, Unix socket,
-optional bearer token, query bounds, and replay bounds. Unknown keys are rejected.
+The configuration file sets the data directory, security mode, integrity anchor, server socket, bearer token, and replay limits.
+Groundhog rejects unknown keys.
 
-See the [configuration reference](/references/configuration).
+The removed `[query]` section produces this error:
 
-## Available HTTP surface
+```text
+The [query] section is no longer supported. Remove it from groundhog.toml.
+```
 
-The current service exposes:
+See [Configuration](/references/configuration).
 
-| route | function |
+## HTTP service
+
+`serve` provides four log API routes:
+
+| method and path | purpose |
 |---|---|
-| `POST /v1/events` | Atomic idempotent JSON batch ingest. |
-| `GET /v1/events` | Ordered replay from a coherent log snapshot. |
-| `POST /v1/query` | Confined read-only SQL against one warehouse generation. |
-| `GET /v1/catalog` | Published source/stream metadata and receipt. |
+| `POST /v1/events` | Atomic, idempotent batch ingest. |
+| `GET /v1/events` | Finite replay or continuous follow. |
+| `GET /v1/streams` | Authoritative stream enumeration. |
+| `POST /v1/sources/retire` | Permanent source retirement. |
 
-There are no current CLI wrappers for those client operations. See the
-[HTTP API reference](/references/http-api).
+The service does not provide `/v1/query` or `/v1/catalog`.
 
-## Unavailable names
+## Unsupported surface
 
-The binary does not accept `import`, `query`, `catalog`, `erase-payload`, `export-key`, or
-`verify --clean`. Passing one is a usage error. Unsupported commands are rejected rather than
-partially performed.
+The binary does not accept `project`, `rebuild`, `import`, `query`, `catalog`, `erase-payload`, `export-key`, or `verify --clean`.
+
+It does not provide a TCP listener, local SQL, automatic derived views, payload erasure, key export, external anchors, or governed operation.
+
+Use `groundhog --help`, `groundhog <COMMAND> --help`, and `groundhog --version` to inspect an installed build.
 
 ## Examples
-
-Initialize and serve a deployment:
 
 ```sh
 groundhog init ./instance
 groundhog serve --config ./instance/groundhog.toml
-```
-
-Publish a new warehouse generation while the service remains live:
-
-```sh
-groundhog project --config ./instance/groundhog.toml
-```
-
-Run deep verification:
-
-```sh
 groundhog verify --chain --config ./instance/groundhog.toml
 ```
 
@@ -171,5 +133,4 @@ groundhog verify --chain --config ./instance/groundhog.toml
 [configuration](/references/configuration),
 [events](/concepts/events),
 [storage](/concepts/storage),
-[warehouse](/concepts/warehouse),
 [deployment operations](/operations/deployment)

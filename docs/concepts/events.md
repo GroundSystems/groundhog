@@ -1,17 +1,18 @@
 ---
 title: Events
-description: Understand the event data that connectors submit and clients consume.
+description: Understand the event data that connectors submit and consumers process.
 ---
 
-Groundhog stores changes from connected systems as one ordered event history. Connectors submit
-events; clients replay or query them later.
+Groundhog stores changes from connected systems as one ordered event history.
+Connectors submit events.
+Consumers replay events, follow new commits, and build their own derived views.
 
-Groundhog records what it receives. It does not fetch from source systems or claim knowledge of
-changes that a connector did not deliver.
+Groundhog records submitted changes.
+It does not fetch from source systems or infer changes that a connector did not submit.
 
 ## What a connector submits
 
-Events are submitted in a batch with a shared source and batch ID:
+Events use a batch with one source and batch ID:
 
 ```json
 {
@@ -30,79 +31,120 @@ Events are submitted in a batch with a shared source and batch ID:
 }
 ```
 
-The batch is atomic: either every event is accepted or none is written.
+The batch is atomic.
+Groundhog accepts every event or writes none of them.
 
 Each submitted event contains:
 
 | field | meaning |
 |---|---|
-| `stream` | Collection within the source, such as `customers` or `invoices`. |
-| `record_key` | Identity of the record within that source. |
+| `stream` | A collection in the source, such as `customers` or `invoices`. |
+| `record_key` | The record identity in that source. |
 | `kind` | `upserted`, `deleted`, or a source-specific event kind. |
 | `occurred_at` | Optional time reported by the source. |
 | `payload` | The JSON value supplied by the connector. |
 
 ## What Groundhog adds
 
-Committed events returned by replay and exposed in SQL include:
+Replay and follow return committed events with these fields:
 
 | field | meaning |
 |---|---|
 | `event_id` | Immutable identity and position in Groundhog history. |
-| `source` | Connected system that supplied the batch. |
-| `stream` | Collection within the source. |
-| `record_key` | Source-scoped record identity. |
-| `kind` | Record-state or source-specific event kind. |
+| `source` | The connected system that supplied the batch. |
+| `stream` | The collection in the source. |
+| `record_key` | The source-scoped record identity. |
+| `kind` | The submitted event kind. |
 | `occurred_at` | Optional source time. |
-| `observed_at` | Time Groundhog received the event. |
-| `payload` | Submitted JSON value. |
-| `content_hash` | Commitment identifying the submitted payload. |
-| `batch_id` | Idempotency ID of the batch that delivered the event. |
-| `event_hash` | Commitment identifying the complete event. |
+| `observed_at` | The time when Groundhog received the event. |
+| `payload` | The submitted JSON value. |
+| `content_hash` | A commitment to the submitted payload. |
+| `batch_id` | The idempotency ID for the submitted batch. |
+| `event_hash` | A commitment to the complete event. |
 
 ## Ordering and timestamps
 
-Increasing `event_id` is the authoritative history order. Replay returns events in that order.
+Increasing `event_id` is the authoritative history order.
+Replay and follow return events in this order.
 
-`occurred_at` is source-provided data and may be missing or out of order. It never changes the
-event's position in Groundhog history. Use `event_id` for replay cursors and processing order.
+`occurred_at` is source data and can be missing or out of order.
+It never changes the event's position in Groundhog history.
 
-SQL relations do not have an implicit order. Use `ORDER BY event_id` when event order matters.
+Consumers must use `event_id` for cursors and processing order.
 
-## Event kinds
+## Event kinds and derived views
 
-`upserted` says the named record exists with the supplied payload. `deleted` says the record no
-longer exists. Other kinds represent source-specific occurrences and do not implicitly replace
-record state.
+`upserted` states that the named record exists with the supplied payload.
+`deleted` states that the record no longer exists.
 
-The binary does not publish a ready-made current-state relation. Consumers that need current
-state derive it from the event history.
+Other kinds describe source-specific occurrences.
+They do not replace record state unless a consumer defines that behavior.
+
+Groundhog does not provide a current-state relation or local SQL.
+Applications build current state, indexes, reports, and other derived views from replay or follow.
 
 ## Idempotent batches
 
 The pair `(source, batch_id)` identifies one batch for the life of the data directory.
 
-- A new ID commits the batch and returns `status: "committed"`.
-- Retrying the same ID with identical content returns `status: "duplicate"` and the original
-  receipt.
-- Reusing the same ID for different content returns HTTP 409 and writes nothing.
+- A new key commits the batch and returns `status: "committed"`.
+- An identical retry returns `status: "duplicate"` and the original receipt.
+- Different content with the same key returns HTTP 409 and writes nothing.
 
-Use a stable delivery, webhook, export, or sync-run ID. If a response is lost, retry the identical
-batch with the same ID. Creating a new ID for the retry can duplicate history.
+Use a stable delivery, webhook, export, or synchronization ID.
+Retry identical content with the same ID after a lost response.
+
+## Conditional append
+
+A batch can require an expected frontier for one stream.
+The `stream_precondition` field names the stream and its expected latest event ID.
+
+Set `expected_frontier` to `null` when the stream must have no committed events.
+A mismatch returns HTTP 409 and commits nothing.
+
+An identical retry of an accepted batch returns its original receipt before Groundhog checks the old precondition again.
+
+## Source lifecycle
+
+Groundhog can permanently retire a source through `POST /v1/sources/retire`.
+A retired source keeps its complete history but refuses new batches.
+
+A new source can declare one retired predecessor in its first batch. The first event must use
+stream `groundhog.source_lineage`, kind `source_succeeded`, and the predecessor as its record key.
+
+The lineage payload contains `v`, `predecessor_source`, and `predecessor_final_frontier`. The
+predecessor must have a retirement event at that exact frontier. Groundhog rejects a lineage
+marker after the successor already has committed events.
 
 ## Names, times, and limits
 
-- `source` and `stream` match `[a-z0-9_][a-z0-9_.-]*` and are at most 128 UTF-8 bytes.
-- `kind` is non-empty and at most 128 bytes.
-- `record_key` is non-empty and at most 1,024 bytes.
-- `batch_id` is non-empty and at most 256 bytes.
-- Source `system` and batch IDs beginning with `groundhog/` are reserved.
-- `occurred_at` uses UTC with a `Z` suffix when provided.
-- A JSON batch contains 1–10,000 events and is at most 32 MiB.
+- `source` and `stream` match `[a-z0-9_][a-z0-9_.-]*` and use at most 128 UTF-8 bytes.
+- `kind` is not empty and uses at most 128 bytes.
+- `record_key` is not empty and uses at most 1,024 bytes.
+- `batch_id` is not empty and uses at most 256 bytes.
+- Groundhog reserves source `system` and batch IDs that start with `groundhog/`.
+- `occurred_at` uses UTC with a `Z` suffix when present.
+- A JSON batch contains 1 through 10,000 events and uses at most 32 MiB.
+
+## JSON and hash rules
+
+Groundhog rejects duplicate JSON object members, malformed Unicode, non-finite numbers, and
+integer aliases that lose precision. Payloads can contain at most 128 nested array or object
+containers.
+
+Groundhog canonicalizes accepted JSON with RFC 8785. `content_hash` is SHA-256 over the canonical
+payload bytes. `event_hash` is SHA-256 over the canonical committed event envelope without the
+payload.
+
+The event envelope contains `batch_id`, `content_hash`, `event_id`, `kind`, `observed_at`,
+`record_key`, `source`, and `stream`. It contains `occurred_at` only when the submitted event has
+that field.
+
+Groundhog computes `batch_digest` from the version, source, ordered event identity fields, and
+content hashes. The digest excludes `batch_id` and `stream_precondition`.
 
 ## See also
 
 [HTTP API](/references/http-api),
 [Storage](/concepts/storage),
-[Warehouse](/concepts/warehouse),
 [Getting started](/guides/getting-started)

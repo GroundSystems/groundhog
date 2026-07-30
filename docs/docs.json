@@ -50,13 +50,17 @@
       },
       {
         "label": "GitHub",
-        "href": "https://github.com/GroundSystems/groundhog-releases"
+        "href": "https://github.com/GroundSystems/groundhog"
+      },
+      {
+        "label": "Contract",
+        "href": "https://github.com/GroundSystems/groundhog/tree/cleanup/spec"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Download",
-      "href": "https://github.com/GroundSystems/groundhog-releases/releases"
+      "href": "https://github.com/GroundSystems/groundhog/releases"
     }
   },
   "navigation": {
@@ -65,7 +69,8 @@
         "group": "Start here",
         "pages": [
           "index",
-          "guides/getting-started"
+          "guides/getting-started",
+          "releases/0.2.0"
         ]
       },
       {
@@ -79,8 +84,7 @@
         "group": "Understand the system",
         "pages": [
           "concepts/events",
-          "concepts/storage",
-          "concepts/warehouse"
+          "concepts/storage"
         ]
       },
       {
@@ -112,7 +116,7 @@
   "footer": {
     "socials": {
       "website": "https://groundhog.so",
-      "github": "https://github.com/GroundSystems/groundhog-releases"
+      "github": "https://github.com/GroundSystems/groundhog"
     },
     "links": [
       {
@@ -141,11 +145,15 @@
           },
           {
             "label": "Releases",
-            "href": "https://github.com/GroundSystems/groundhog-releases/releases"
+            "href": "https://github.com/GroundSystems/groundhog/releases"
           },
           {
-            "label": "Release repository",
-            "href": "https://github.com/GroundSystems/groundhog-releases"
+            "label": "Groundhog repository",
+            "href": "https://github.com/GroundSystems/groundhog"
+          },
+          {
+            "label": "Published contract",
+            "href": "https://github.com/GroundSystems/groundhog/tree/cleanup/spec"
           }
         ]
       }

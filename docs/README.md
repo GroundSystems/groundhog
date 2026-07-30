@@ -1,57 +1,67 @@
 # Groundhog manual
 
-This directory publishes the Groundhog manual in ordinary Markdown and a Unix-manual
-structure:
+This directory contains the Groundhog 0.2 manual in Markdown.
 
-- **commands** document executable entry points;
-- **references** document stable configuration and API surfaces;
-- **concepts** explain event data, durability, and query freshness from a user's perspective;
-- **operations** cover deployment lifecycle, verification, and recovery; and
-- **guides** provide end-to-end tasks.
+- **commands** document executable entry points
+- **references** document configuration and HTTP surfaces
+- **concepts** explain event data and durable storage
+- **operations** cover deployment, verification, upgrade, and recovery
+- **guides** provide complete tasks
+- **SDKs** document supported client libraries
 
 ## Start here
 
-- [Getting started](guides/getting-started.md): complete the first local ingest, replay,
-  publication, query, and verification loop.
-- [groundhog(1)](references/cli.md): top-level CLI synopsis, options, commands, streams, and
-  exit status.
-- [Configuration](references/configuration.md): every accepted `groundhog.toml` field.
-- [Operations](operations/deployment.md): run and maintain a deployment safely.
+- [Getting started](guides/getting-started.md) covers local ingest, replay, follow, streams, and verification.
+- [Groundhog 0.2.0](releases/0.2.0.md) lists breaking changes and the upgrade procedure.
+- [groundhog(1)](references/cli.md) lists CLI options, commands, streams, and exit status.
+- [Configuration](references/configuration.md) lists every accepted `groundhog.toml` field.
+- [Deployment operations](operations/deployment.md) explains supervision, maintenance, backup, and upgrade.
+
+## Product rule
+
+Groundhog stores and serves the durable event log.
+Applications build their own derived views from replay or follow.
+
+Groundhog 0.2 does not include a warehouse, local SQL, query routes, catalog routes, or projection commands.
 
 ## Commands
 
-All executable commands are documented together in [groundhog commands](commands.md), including
-shared configuration, ownership, output, and exit behavior.
+The [groundhog commands](commands.md) page documents all commands.
 
 | command | purpose |
 |---|---|
 | [`init`](commands.md#init) | Create or validate a deployment. |
 | [`serve`](commands.md#serve) | Run the Unix-socket HTTP service. |
-| [`seal`](commands.md#seal) | Turn the append tail into immutable segments. |
-| [`project`](commands.md#project) | Publish the current log frontier for SQL. |
-| [`rebuild`](commands.md#rebuild) | Reconstruct the warehouse from the log. |
-| [`verify`](commands.md#verify) | Verify storage and the integrity chain. |
+| [`seal`](commands.md#seal) | Move the append tail into immutable Parquet segments. |
+| [`verify`](commands.md#verify) | Verify storage and optional chain integrity. |
+
+## Published interface
+
+[`openapi.yaml`](../openapi.yaml) is the authoritative HTTP contract. The
+[verification directory](../verify/README.md) contains the public conformance tools, black-box
+checks, and compatibility fixtures.
+
+`GroundSystems/groundhog-src` publishes these files to the public repository. Contributors edit
+the canonical files only in the private source repository.
 
 ## System pages
 
 | page | scope |
 |---|---|
-| [Events](concepts/events.md) | Event fields, kinds, identity, ordering, and batches. |
-| [Storage](concepts/storage.md) | Durability, writer ownership, sealing, recovery, and backup. |
-| [Warehouse](concepts/warehouse.md) | Publication, relations, receipts, catalog, and SQL. |
-| [HTTP API](references/http-api.md) | Transport, authentication, routes, limits, and retries. |
-| [Deployment](operations/deployment.md) | Ownership, freshness, maintenance order, and supervision. |
-| [Verification and recovery](operations/verification-and-recovery.md) | Failure model, verification depth, and safe recovery. |
+| [Events](concepts/events.md) | Event fields, identity, order, batches, preconditions, and source lifecycle. |
+| [Storage](concepts/storage.md) | Durability, Parquet segments, writer ownership, recovery, and backup. |
+| [HTTP API](references/http-api.md) | Ingest, replay, follow, streams, lifecycle, limits, and errors. |
+| [Deployment](operations/deployment.md) | Supervision, consumers, maintenance, upgrade, and backup. |
+| [Verification and recovery](operations/verification-and-recovery.md) | Verification depth and failure procedures. |
+| [Python SDK](sdks/python.md) | Unix, HTTPS, ingest, replay, streams, and typed errors. |
 
 ## Released surface
 
-The binary accepts `init`, `serve`, `seal`, `project`, `rebuild`, and `verify [--chain]`.
-Ingest, replay, query, and catalog are HTTP operations rather than CLI commands.
+The Groundhog 0.2 binary accepts `init`, `serve`, `seal`, and `verify [--chain]`.
 
-The binary does not currently provide CLI `import`, `query`, or `catalog`; `verify --clean`;
-payload erasure; key export; a TCP listener; automatic projection; streaming ingest;
-current-state relations; external anchors; or governed/locked operation. Unsupported names and
-configuration are rejected rather than approximated.
+The service provides atomic ingest, finite replay, follow, streams, and source retirement.
+The Python SDK provides ingest, finite replay, and streams over Unix sockets or HTTPS.
 
-Use `groundhog --help`, `groundhog <COMMAND> --help`, and `groundhog --version` to confirm
-the surface of the installed binary.
+The binary does not provide `project`, `rebuild`, local SQL, `/v1/query`, `/v1/catalog`, or a TCP listener.
+
+Use `groundhog --help`, `groundhog <COMMAND> --help`, and `groundhog --version` to inspect an installed build.

@@ -1,0 +1,1179 @@
+openapi: 3.2.0
+$self: https://groundhog.dev/openapi/0.2.0
+jsonSchemaDialect: https://spec.openapis.org/oas/3.2/dialect/2025-09-17
+info:
+  title: Groundhog HTTP API
+  summary: Durable event-log append, replay, enumeration, and source lifecycle API.
+  description: |
+    Groundhog stores committed events in one ordered log. Append and retirement
+    operations use one serialized writer. Replay and stream enumeration read one
+    coherent committed snapshot.
+
+    The local runtime serves HTTP/1.1 over a Unix-domain socket. Deployments can
+    expose the same HTTP contract through another authenticated transport.
+
+    This document is the authoritative HTTP contract for Groundhog 0.2.0. Clients
+    use stable error codes for control flow and treat message text as descriptive.
+    Fixed event fields evolve only through additive changes.
+  version: 0.2.0
+  license:
+    name: Functional Source License 1.1, Apache 2.0 Future License
+    identifier: FSL-1.1-ALv2
+servers:
+  - url: http://localhost
+    description: The host value is nominal when HTTP runs over the local Unix socket.
+x-deployment-authentication:
+  configuration: server.token
+  empty: No authentication is required.
+  configured: Every request requires the bearerAuth scheme before routing.
+tags:
+  - name: Events
+    description: Atomic append and ordered replay operations.
+  - name: Streams
+    description: Durable stream enumeration.
+  - name: Lifecycle
+    description: Permanent source retirement.
+paths:
+  /v1/events:
+    post:
+      operationId: appendEvents
+      tags: [Events]
+      summary: Append one atomic event batch.
+      description: |
+        The batch commits completely or not at all. The pair `(source, batch_id)`
+        is the idempotency key. Groundhog binds that key to a canonical
+        `batch_digest`. An identical retry returns the original receipt. Different
+        content returns `batch_id_conflict` and does not change the log.
+
+        Groundhog resolves an existing idempotency key before it checks retirement,
+        successor lineage, or a stream precondition. The writer then checks these
+        conditions and commits the complete batch as one serialized operation.
+        This operation accepts no query parameters.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+      requestBody:
+        required: true
+        description: A closed batch envelope of at most 32 MiB and 10,000 events.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppendBatch'
+            examples:
+              append:
+                summary: One event with a stream-frontier precondition.
+                value:
+                  v: 1
+                  batch_id: sync-000042
+                  source: stripe
+                  stream_precondition:
+                    stream: customers
+                    expected_frontier: null
+                  events:
+                    - stream: customers
+                      record_key: cus_42
+                      kind: upserted
+                      occurred_at: '2026-07-07T08:58:41.5Z'
+                      payload:
+                        id: cus_42
+                        active: true
+      responses:
+        '200':
+          $ref: '#/components/responses/AppendSuccess'
+        '400':
+          $ref: '#/components/responses/AppendBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/AppendConflict'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/Overloaded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/WriterPoisoned'
+    get:
+      operationId: replayEvents
+      tags: [Events]
+      summary: Replay committed events.
+      description: |
+        With `follow=false` or no `follow` value, the operation returns one finite
+        JSON response from one coherent snapshot. `next_after` reports scan
+        progress. It does not anchor a later request to the first snapshot.
+
+        The finite scan orders events by `event_id`. It applies all filters with
+        logical AND after it excludes events at or before `after`. A continuation
+        captures a new snapshot and can include later commits.
+
+        With `follow=true`, the operation returns NDJSON. Each line independently
+        matches `FollowRecord`. The stream starts with snapshot event records and
+        one caught-up record. Later event records use the live phase.
+      parameters:
+        - $ref: '#/components/parameters/ReplayQuery'
+      x-follow-response-headers:
+        Cache-Control: no-store
+        Connection: close
+      responses:
+        '200':
+          $ref: '#/components/responses/ReplaySuccess'
+        '400':
+          $ref: '#/components/responses/ReplayBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/Overloaded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    head:
+      operationId: inspectReplay
+      tags: [Events]
+      summary: Inspect replay response headers.
+      description: |
+        This operation applies the GET query contract. It returns the selected GET
+        status and headers without a response body.
+      parameters:
+        - $ref: '#/components/parameters/ReplayQuery'
+      responses:
+        '200':
+          $ref: '#/components/responses/HeadReplaySuccess'
+        '400':
+          $ref: '#/components/responses/HeadBadRequest'
+        '401':
+          $ref: '#/components/responses/HeadUnauthorized'
+        '429':
+          $ref: '#/components/responses/HeadOverloaded'
+        '500':
+          $ref: '#/components/responses/HeadInternalError'
+  /v1/streams:
+    get:
+      operationId: listStreams
+      tags: [Streams]
+      summary: Enumerate durable streams.
+      description: |
+        The response lists `(source, stream)` pairs in lexicographic order. A
+        continuation uses both `after` and the first page's `through` frontier.
+        The anchor excludes later events, so all anchored pages reconstruct one
+        stream-enumeration snapshot without server-side cursor state.
+      parameters:
+        - $ref: '#/components/parameters/StreamsQuery'
+      responses:
+        '200':
+          $ref: '#/components/responses/StreamsSuccess'
+        '400':
+          $ref: '#/components/responses/StreamsBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/Overloaded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    head:
+      operationId: inspectStreams
+      tags: [Streams]
+      summary: Inspect stream-enumeration response headers.
+      description: |
+        This operation applies the GET query contract. It returns the selected GET
+        status and headers without a response body.
+      parameters:
+        - $ref: '#/components/parameters/StreamsQuery'
+      responses:
+        '200':
+          $ref: '#/components/responses/HeadJsonSuccess'
+        '400':
+          $ref: '#/components/responses/HeadBadRequest'
+        '401':
+          $ref: '#/components/responses/HeadUnauthorized'
+        '429':
+          $ref: '#/components/responses/HeadOverloaded'
+        '500':
+          $ref: '#/components/responses/HeadInternalError'
+  /v1/sources/retire:
+    post:
+      operationId: retireSource
+      tags: [Lifecycle]
+      summary: Permanently retire one source.
+      description: |
+        Retirement commits one ordered system event. A later request returns the
+        same retirement record with `status: already_retired`. The operation accepts
+        no query parameters. Retirement preserves all prior history and permanently
+        refuses new batches for that source.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+      requestBody:
+        required: true
+        description: A closed source-retirement envelope of at most 1 MiB.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetirementRequest'
+            examples:
+              retire:
+                value:
+                  v: 1
+                  source: agent_old
+      responses:
+        '200':
+          $ref: '#/components/responses/RetirementSuccess'
+        '400':
+          $ref: '#/components/responses/RetirementBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/SourceNotFound'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/Overloaded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/WriterPoisoned'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A deployment can require one configured opaque bearer token.
+  parameters:
+    NoQuery:
+      name: query
+      in: querystring
+      description: The query string must contain no parameters.
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            $ref: '#/components/schemas/NoQuery'
+          examples:
+            empty:
+              dataValue: {}
+              serializedValue: ''
+    ReplayQuery:
+      name: replay
+      in: querystring
+      description: |
+        Each property can occur at most once. Unknown or repeated properties return
+        HTTP 400. All filters use exact equality after form decoding.
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            $ref: '#/components/schemas/ReplayQuery'
+          examples:
+            finitePage:
+              dataValue:
+                source: stripe
+                stream: customers
+                limit: 100
+              serializedValue: source=stripe&stream=customers&limit=100
+            follow:
+              dataValue:
+                source: stripe
+                follow: true
+                limit: 10
+              serializedValue: source=stripe&follow=true&limit=10
+    StreamsQuery:
+      name: streams
+      in: querystring
+      description: |
+        Each property can occur at most once. Unknown or repeated properties return
+        HTTP 400. `after` requires the first page's `through` value.
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            $ref: '#/components/schemas/StreamsQuery'
+          examples:
+            firstPage:
+              dataValue:
+                source: stripe
+                limit: 100
+              serializedValue: source=stripe&limit=100
+            nextPage:
+              dataValue:
+                after: stripe/customers
+                through: 019c0000-0000-7000-8000-000000000004
+                limit: 100
+              serializedValue: after=stripe%2Fcustomers&through=019c0000-0000-7000-8000-000000000004&limit=100
+  headers:
+    RetryAfter:
+      description: Decimal seconds before the client should retry admission.
+      schema:
+        type: string
+        pattern: '^[0-9]+$'
+      example: '1'
+  responses:
+    AppendSuccess:
+      description: The batch committed, or the server returned its durable duplicate receipt.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AppendReceipt'
+          examples:
+            committed:
+              value:
+                status: committed
+                batch_digest: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                events: 1
+                first_event_id: 019c0000-0000-7000-8000-000000000001
+                last_event_id: 019c0000-0000-7000-8000-000000000001
+            duplicate:
+              value:
+                status: duplicate
+                batch_digest: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                events: 1
+                first_event_id: 019c0000-0000-7000-8000-000000000001
+                last_event_id: 019c0000-0000-7000-8000-000000000001
+    ReplaySuccess:
+      description: A finite replay document or a snapshot-then-live follow stream.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReplayResponse'
+          examples:
+            finite:
+              value:
+                events:
+                  - event_id: 019c0000-0000-7000-8000-000000000001
+                    source: stripe
+                    stream: customers
+                    record_key: cus_42
+                    kind: upserted
+                    occurred_at: '2026-07-07T08:58:41.5Z'
+                    observed_at: '2026-07-07T08:58:42.000Z'
+                    payload:
+                      id: cus_42
+                    content_hash: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    batch_id: sync-000042
+                    event_hash: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+                last_event_id: 019c0000-0000-7000-8000-000000000001
+                next_after: 019c0000-0000-7000-8000-000000000001
+                snapshot_through_event_id: 019c0000-0000-7000-8000-000000000004
+        application/x-ndjson:
+          itemSchema:
+            $ref: '#/components/schemas/FollowRecord'
+          examples:
+            snapshotAndCaughtUp:
+              value: |
+                {"type":"events","phase":"snapshot","events":[],"next_after":null,"snapshot_through_event_id":null}
+                {"type":"caught_up","next_after":null,"snapshot_through_event_id":null}
+    HeadReplaySuccess:
+      description: Replay succeeded. The response has no body.
+    HeadJsonSuccess:
+      description: Stream enumeration succeeded. The response has no body.
+    StreamsSuccess:
+      description: One durable stream-enumeration page.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StreamsResponse'
+          examples:
+            page:
+              value:
+                v: 1
+                streams:
+                  - source: stripe
+                    stream: customers
+                    frontier_event_id: 019c0000-0000-7000-8000-000000000004
+                    event_count: 42
+                next_after: null
+                snapshot_through_event_id: 019c0000-0000-7000-8000-000000000004
+    RetirementSuccess:
+      description: The source retired, or the server returned its durable retirement record.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RetirementResponse'
+          examples:
+            retired:
+              value:
+                v: 1
+                status: retired
+                source: agent_old
+                final_frontier: 019c0000-0000-7000-8000-000000000003
+                retirement_event_id: 019c0000-0000-7000-8000-000000000004
+            alreadyRetired:
+              value:
+                v: 1
+                status: already_retired
+                source: agent_old
+                final_frontier: 019c0000-0000-7000-8000-000000000003
+                retirement_event_id: 019c0000-0000-7000-8000-000000000004
+    AppendBadRequest:
+      description: The query, JSON envelope, batch, event, or lineage marker is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            query:
+              value:
+                error: invalid_request
+                message: POST /v1/events does not accept query parameter "limit"
+            event:
+              value:
+                error: invalid_events
+                message: One or more submitted events are invalid.
+                errors:
+                  - index: 0
+                    code: invalid_event
+                    message: record_key is empty
+            lineage:
+              value:
+                error: invalid_source_lineage
+                message: A lineage event must be the first event for its source.
+    ReplayBadRequest:
+      description: The encoded query or replay value is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            malformedQuery:
+              value:
+                error: invalid_request
+                message: malformed query string
+            badLimit:
+              value:
+                error: invalid_replay_request
+                message: limit "0" is not an integer in 1..=100000
+    StreamsBadRequest:
+      description: The query is invalid, or the requested anchor is unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingThrough:
+              value:
+                error: invalid_streams_request
+                message: after requires the through frontier returned by the first page
+            unavailableAnchor:
+              value:
+                error: stream_anchor_unavailable
+                message: through frontier is not present in the captured log
+    RetirementBadRequest:
+      description: The encoded query or source-retirement envelope is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            badSource:
+              value:
+                error: invalid_source_retirement
+                message: invalid source retirement
+    Unauthorized:
+      description: The deployment requires a valid bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unauthorized:
+              value:
+                error: unauthorized
+                message: The request does not have valid authorization.
+    SourceNotFound:
+      description: The source has no committed event and cannot be retired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SourceNotFoundError'
+          examples:
+            sourceNotFound:
+              value:
+                error: source_not_found
+                message: The source has no committed events.
+                source: agent_missing
+    AppendConflict:
+      description: The idempotency key, lifecycle state, lineage, or stream frontier conflicts.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/BatchIdConflictError'
+              - $ref: '#/components/schemas/SourceRetiredError'
+              - $ref: '#/components/schemas/SourceLineageConflictError'
+              - $ref: '#/components/schemas/StreamFrontierConflictError'
+          examples:
+            batchIdConflict:
+              value:
+                error: batch_id_conflict
+                message: The batch ID is committed with different content.
+                source: stripe
+                batch_id: sync-000042
+            sourceRetired:
+              value:
+                error: source_retired
+                message: The source is retired and refuses new batches.
+                source: agent_old
+                final_frontier: 019c0000-0000-7000-8000-000000000003
+                retirement_event_id: 019c0000-0000-7000-8000-000000000004
+            lineageConflict:
+              value:
+                error: source_lineage_conflict
+                message: The predecessor retirement does not match the lineage marker.
+                source: agent_new
+                predecessor_source: agent_old
+                expected_predecessor_frontier: 019c0000-0000-7000-8000-000000000003
+                actual_predecessor_frontier: null
+            streamFrontierConflict:
+              value:
+                error: stream_frontier_conflict
+                message: The current stream frontier does not match the request.
+                source: stripe
+                stream: customers
+                expected_frontier: null
+                actual_frontier: 019c0000-0000-7000-8000-000000000001
+    BodyTooLarge:
+      description: The encoded request body or event array exceeds its limit.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            bodyTooLarge:
+              value:
+                error: body_too_large
+                message: The request body exceeds its limit.
+    UnsupportedMediaType:
+      description: The request media type or content encoding is unsupported.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unsupported:
+              value:
+                error: unsupported_media_type
+                message: The request does not use a supported media type.
+    Overloaded:
+      description: Admission expired before the operation started.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            overloaded:
+              value:
+                error: overloaded
+                message: The server did not admit the operation before the deadline.
+    InternalError:
+      description: The server encountered an unexpected failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            internal:
+              value:
+                error: internal_error
+                message: The server encountered an unexpected failure.
+    WriterPoisoned:
+      description: A mutation outcome is uncertain. Reopen the serving session before retrying.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            writerPoisoned:
+              value:
+                error: writer_poisoned
+                message: The writer is unavailable. Reopen the serving session before retrying.
+    HeadBadRequest:
+      description: The encoded query or operation-specific query value is invalid. The response has no body.
+    HeadUnauthorized:
+      description: The deployment requires a valid bearer token. The response has no body.
+    HeadOverloaded:
+      description: Admission expired before the operation started. The response has no body.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+    HeadInternalError:
+      description: The server encountered an unexpected failure. The response has no body.
+  schemas:
+    UuidV7:
+      type: string
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      description: Canonical hyphenated lowercase RFC-variant UUIDv7 text.
+    Sha256:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+    SourceName:
+      type: string
+      pattern: '^[a-z0-9_][a-z0-9_.-]*$'
+      x-max-utf8-bytes: 128
+    ClientSourceName:
+      allOf:
+        - $ref: '#/components/schemas/SourceName'
+        - not:
+            const: system
+    StreamName:
+      type: string
+      pattern: '^[a-z0-9_][a-z0-9_.-]*$'
+      x-max-utf8-bytes: 128
+    NoQuery:
+      type: object
+      maxProperties: 0
+      additionalProperties: false
+    ReplayQuery:
+      type: object
+      properties:
+        after:
+          $ref: '#/components/schemas/UuidV7'
+        source:
+          type: string
+        stream:
+          type: string
+        record_key:
+          type: string
+          minLength: 1
+          x-max-utf8-bytes: 1024
+        kind:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+          description: |
+            The configured `[replay].max_limit` is the maximum. Omission uses the
+            configured `[replay].default_limit`.
+          x-configured-maximum: replay.max_limit
+          x-configured-default: replay.default_limit
+        follow:
+          type: boolean
+          default: false
+      additionalProperties: false
+    StreamsQuery:
+      type: object
+      properties:
+        source:
+          $ref: '#/components/schemas/SourceName'
+        after:
+          type: string
+          pattern: '^[a-z0-9_][a-z0-9_.-]*/[a-z0-9_][a-z0-9_.-]*$'
+        through:
+          $ref: '#/components/schemas/UuidV7'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+      dependentRequired:
+        after: [through]
+      additionalProperties: false
+    SubmittedEvent:
+      description: |
+        A closed submitted event. Groundhog rejects duplicate JSON members,
+        malformed Unicode, non-finite numbers, precision-losing integer aliases,
+        and payloads deeper than 128 array or object containers. Groundhog applies
+        RFC 8785 canonicalization to accepted payloads. `occurred_at` must name a
+        real UTC calendar instant. Numeric offsets and leap seconds are invalid.
+      x-json-input-rules:
+        duplicate-members: reject after escape decoding
+        numbers: finite IEEE 754 binary64 without precision-losing integer aliases
+        payload-container-depth: 128
+        occurred-at: real UTC calendar instant with one through nine optional fractional digits
+      type: object
+      required: [stream, record_key, kind, payload]
+      properties:
+        stream:
+          $ref: '#/components/schemas/StreamName'
+        record_key:
+          type: string
+          minLength: 1
+          x-max-utf8-bytes: 1024
+        kind:
+          type: string
+          minLength: 1
+          x-max-utf8-bytes: 128
+        occurred_at:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$'
+        payload: true
+      additionalProperties: false
+    StreamPrecondition:
+      type: object
+      required: [stream, expected_frontier]
+      properties:
+        stream:
+          $ref: '#/components/schemas/StreamName'
+        expected_frontier:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+      additionalProperties: false
+    AppendBatch:
+      title: Groundhog append batch
+      description: |
+        Event order becomes commit order. The optional stream precondition is
+        admission metadata. It must name the stream used by every event. Groundhog
+        excludes the precondition and batch ID from the batch digest.
+      x-invariants:
+        - Every event stream equals stream_precondition.stream when the precondition is present.
+        - At most one successor-lineage marker occurs, as the first event of the successor's first batch.
+      type: object
+      required: [batch_id, source, events]
+      properties:
+        v:
+          const: 1
+          default: 1
+        batch_id:
+          type: string
+          minLength: 1
+          x-max-utf8-bytes: 256
+          not:
+            pattern: '^groundhog/'
+        source:
+          $ref: '#/components/schemas/ClientSourceName'
+        stream_precondition:
+          $ref: '#/components/schemas/StreamPrecondition'
+        events:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items:
+            $ref: '#/components/schemas/SubmittedEvent'
+      additionalProperties: false
+    AppendReceipt:
+      title: Groundhog append receipt
+      description: |
+        Every successful retry returns the original event count, event range, and
+        batch digest. Only status changes from `committed` to `duplicate`.
+      type: object
+      required: [status, batch_digest, events, first_event_id, last_event_id]
+      properties:
+        status:
+          enum: [committed, duplicate]
+        batch_digest:
+          $ref: '#/components/schemas/Sha256'
+        events:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        first_event_id:
+          $ref: '#/components/schemas/UuidV7'
+        last_event_id:
+          $ref: '#/components/schemas/UuidV7'
+      additionalProperties: false
+    Event:
+      title: Groundhog committed event
+      description: |
+        `content_hash` is SHA-256 over canonical payload bytes. `event_hash` is
+        SHA-256 over the canonical envelope containing `batch_id`, `content_hash`,
+        `event_id`, `kind`, `observed_at`, `record_key`, `source`, and `stream`.
+        The envelope contains `occurred_at` only when the submitted event has it.
+      type: object
+      required:
+        - event_id
+        - source
+        - stream
+        - record_key
+        - kind
+        - observed_at
+        - payload
+        - content_hash
+        - batch_id
+        - event_hash
+      properties:
+        event_id:
+          $ref: '#/components/schemas/UuidV7'
+        source:
+          $ref: '#/components/schemas/SourceName'
+        stream:
+          $ref: '#/components/schemas/StreamName'
+        record_key:
+          type: string
+          minLength: 1
+          x-max-utf8-bytes: 1024
+        kind:
+          type: string
+          minLength: 1
+          x-max-utf8-bytes: 128
+        occurred_at:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$'
+        observed_at:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+        payload: true
+        content_hash:
+          $ref: '#/components/schemas/Sha256'
+        batch_id:
+          type: string
+          minLength: 1
+        event_hash:
+          $ref: '#/components/schemas/Sha256'
+      additionalProperties: false
+    ReplayResponse:
+      title: Groundhog finite replay response
+      description: |
+        All values come from one coherent log snapshot. `next_after` is the last
+        conclusively scanned position. `last_event_id` is only the last returned
+        event. A later request does not share this response's snapshot.
+      x-invariants:
+        - Events increase strictly by event_id and do not exceed snapshot_through_event_id.
+        - last_event_id is absent exactly when events is empty.
+        - When present, last_event_id equals the final returned event_id.
+        - next_after never precedes the request after cursor or last_event_id.
+        - snapshot_through_event_id is null exactly when the captured log is empty.
+      type: object
+      required: [events, next_after, snapshot_through_event_id]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        last_event_id:
+          $ref: '#/components/schemas/UuidV7'
+        next_after:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        snapshot_through_event_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+      additionalProperties: false
+    FollowEvents:
+      title: Follow event page
+      type: object
+      required: [type, phase, events, next_after, snapshot_through_event_id]
+      properties:
+        type:
+          const: events
+        phase:
+          enum: [snapshot, live]
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        last_event_id:
+          $ref: '#/components/schemas/UuidV7'
+        next_after:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        snapshot_through_event_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+      additionalProperties: false
+    FollowCaughtUp:
+      title: Follow caught-up marker
+      type: object
+      required: [type, next_after, snapshot_through_event_id]
+      properties:
+        type:
+          const: caught_up
+        next_after:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        snapshot_through_event_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+      additionalProperties: false
+    FollowEnd:
+      title: Follow terminal record
+      type: object
+      required: [type, reason, last_event_id]
+      properties:
+        type:
+          const: end
+        reason:
+          enum: [shutdown, writer_poisoned, session_closed, buffer_exceeded, replay_failed]
+        last_event_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        detail:
+          type: string
+      additionalProperties: false
+    FollowRecord:
+      oneOf:
+        - $ref: '#/components/schemas/FollowEvents'
+        - $ref: '#/components/schemas/FollowCaughtUp'
+        - $ref: '#/components/schemas/FollowEnd'
+    StreamRow:
+      type: object
+      required: [source, stream, frontier_event_id, event_count]
+      properties:
+        source:
+          $ref: '#/components/schemas/SourceName'
+        stream:
+          $ref: '#/components/schemas/StreamName'
+        frontier_event_id:
+          $ref: '#/components/schemas/UuidV7'
+        event_count:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    StreamsResponse:
+      title: Groundhog stream enumeration response
+      description: |
+        Each row counts committed events through `snapshot_through_event_id`.
+        `next_after` is the last returned `source/stream` cursor only when more rows
+        exist at that frontier.
+      type: object
+      required: [v, streams, next_after, snapshot_through_event_id]
+      properties:
+        v:
+          const: 1
+        streams:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/StreamRow'
+        next_after:
+          oneOf:
+            - type: string
+              pattern: '^[a-z0-9_][a-z0-9_.-]*/[a-z0-9_][a-z0-9_.-]*$'
+            - type: 'null'
+        snapshot_through_event_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+      additionalProperties: false
+    RetirementRequest:
+      title: Groundhog source retirement request
+      type: object
+      required: [source]
+      properties:
+        v:
+          const: 1
+          default: 1
+        source:
+          $ref: '#/components/schemas/ClientSourceName'
+      additionalProperties: false
+    RetirementPayload:
+      title: Groundhog source retirement payload
+      description: |
+        Groundhog stores this payload in a system event on stream
+        `groundhog.source_lifecycle`. The event uses kind `source_retired`, the
+        retired source as its record key, and batch ID
+        `groundhog/retire/{source}/{final_frontier}`. It uses source `system` and
+        omits `occurred_at`.
+      type: object
+      required: [v, source, final_frontier]
+      properties:
+        v:
+          const: 1
+        source:
+          $ref: '#/components/schemas/ClientSourceName'
+        final_frontier:
+          $ref: '#/components/schemas/UuidV7'
+      additionalProperties: false
+    RetirementResponse:
+      title: Groundhog source retirement response
+      type: object
+      required: [v, status, source, final_frontier, retirement_event_id]
+      properties:
+        v:
+          const: 1
+        status:
+          enum: [retired, already_retired]
+        source:
+          $ref: '#/components/schemas/SourceName'
+        final_frontier:
+          $ref: '#/components/schemas/UuidV7'
+        retirement_event_id:
+          $ref: '#/components/schemas/UuidV7'
+      additionalProperties: false
+    LineagePayload:
+      title: Groundhog successor lineage payload
+      description: |
+        A successor declares this payload in the first event of its first batch.
+        That event uses stream `groundhog.source_lineage`, kind
+        `source_succeeded`, and the predecessor source as its record key.
+        The predecessor must have a durable retirement at the exact declared
+        frontier. The successor and predecessor must differ. The marker omits
+        `occurred_at`. A batch cannot contain another lineage marker.
+      x-invariants:
+        - The marker is the first event of the successor's first batch.
+        - The batch contains exactly one groundhog.source_lineage event.
+        - The successor differs from predecessor_source.
+        - The predecessor retirement frontier equals predecessor_final_frontier.
+        - record_key equals predecessor_source and occurred_at is absent.
+      type: object
+      required: [v, predecessor_source, predecessor_final_frontier]
+      properties:
+        v:
+          const: 1
+        predecessor_source:
+          $ref: '#/components/schemas/ClientSourceName'
+        predecessor_final_frontier:
+          $ref: '#/components/schemas/UuidV7'
+      additionalProperties: false
+    ErrorCode:
+      type: string
+      enum:
+        - invalid_request
+        - invalid_batch
+        - invalid_events
+        - invalid_source_retirement
+        - invalid_source_lineage
+        - invalid_replay_request
+        - invalid_streams_request
+        - stream_anchor_unavailable
+        - unauthorized
+        - not_found
+        - source_not_found
+        - method_not_allowed
+        - batch_id_conflict
+        - source_retired
+        - source_lineage_conflict
+        - stream_frontier_conflict
+        - body_too_large
+        - unsupported_media_type
+        - overloaded
+        - internal_error
+        - writer_poisoned
+      x-http-status:
+        invalid_request: 400
+        invalid_batch: 400
+        invalid_events: 400
+        invalid_source_retirement: 400
+        invalid_source_lineage: 400
+        invalid_replay_request: 400
+        invalid_streams_request: 400
+        stream_anchor_unavailable: 400
+        unauthorized: 401
+        not_found: 404
+        source_not_found: 404
+        method_not_allowed: 405
+        batch_id_conflict: 409
+        source_retired: 409
+        source_lineage_conflict: 409
+        stream_frontier_conflict: 409
+        body_too_large: 413
+        unsupported_media_type: 415
+        overloaded: 429
+        internal_error: 500
+        writer_poisoned: 503
+    IndexedEventError:
+      type: object
+      required: [index, code, message]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*$'
+        message:
+          type: string
+          minLength: 1
+      additionalProperties: true
+    Error:
+      title: Groundhog HTTP error
+      description: |
+        `error` is stable for client control flow. `message` describes the failure
+        and can change. Clients retain or ignore unknown structured members. An
+        unknown error code remains an error with the received HTTP status.
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+          minLength: 1
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/IndexedEventError'
+      allOf:
+        - if:
+            required: [error]
+            properties:
+              error:
+                const: invalid_events
+          then:
+            required: [errors]
+      additionalProperties: true
+    SourceNotFoundError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [source]
+          properties:
+            error:
+              const: source_not_found
+            source:
+              $ref: '#/components/schemas/SourceName'
+    BatchIdConflictError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [source, batch_id]
+          properties:
+            error:
+              const: batch_id_conflict
+            source:
+              $ref: '#/components/schemas/SourceName'
+            batch_id:
+              type: string
+              minLength: 1
+    SourceRetiredError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [source, final_frontier, retirement_event_id]
+          properties:
+            error:
+              const: source_retired
+            source:
+              $ref: '#/components/schemas/SourceName'
+            final_frontier:
+              $ref: '#/components/schemas/UuidV7'
+            retirement_event_id:
+              $ref: '#/components/schemas/UuidV7'
+    SourceLineageConflictError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required:
+            - source
+            - predecessor_source
+            - expected_predecessor_frontier
+            - actual_predecessor_frontier
+          properties:
+            error:
+              const: source_lineage_conflict
+            source:
+              $ref: '#/components/schemas/SourceName'
+            predecessor_source:
+              $ref: '#/components/schemas/SourceName'
+            expected_predecessor_frontier:
+              $ref: '#/components/schemas/UuidV7'
+            actual_predecessor_frontier:
+              oneOf:
+                - $ref: '#/components/schemas/UuidV7'
+                - type: 'null'
+    StreamFrontierConflictError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [source, stream, expected_frontier, actual_frontier]
+          properties:
+            error:
+              const: stream_frontier_conflict
+            source:
+              $ref: '#/components/schemas/SourceName'
+            stream:
+              $ref: '#/components/schemas/StreamName'
+            expected_frontier:
+              oneOf:
+                - $ref: '#/components/schemas/UuidV7'
+                - type: 'null'
+            actual_frontier:
+              oneOf:
+                - $ref: '#/components/schemas/UuidV7'
+                - type: 'null'
