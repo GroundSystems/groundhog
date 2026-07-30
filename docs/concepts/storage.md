@@ -83,6 +83,7 @@ Groundhog 0.2 ignores these Groundhog 0.1 files:
 
 ```text
 data/warehouse.duckdb
+data/warehouse.duckdb.wal
 data/warehouse.duckdb.publish.lock
 data/.warehouse.duckdb.candidate-*
 ```
