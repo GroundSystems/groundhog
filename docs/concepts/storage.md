@@ -1,92 +1,116 @@
 ---
 title: Storage and durability
-description: Understand durability, writer ownership, sealing, recovery, and backup.
+description: Understand log durability, Parquet segments, writer ownership, recovery, and backup.
 ---
 
-Users interact with Groundhog through the CLI and HTTP API. Files under the configured data
-directory belong to Groundhog and should not be edited directly.
+Users interact with Groundhog through the CLI and HTTP API.
+Do not edit files under the configured data directory.
 
-## Durable history and query data
+## Durable event log
 
-The data directory contains two kinds of state:
+Groundhog 0.2 stores one kind of product state: the durable append-only event log.
+The log is the backup-critical artifact.
 
-- the event log is the durable history and the backup-critical artifact;
-- the warehouse is query data derived from that history.
+Groundhog stores the log under `[data].dir/log/`.
+The durable storage schema remains version 1.
 
-The warehouse can be recreated with `rebuild`. A backup that contains only the warehouse is not
-a backup of event history.
+Groundhog stores active appends in a framed tail.
+The `seal` command moves committed history into immutable Parquet segments.
+
+Parquet is the log-segment format.
+Groundhog does not need DuckDB to read, verify, or seal these segments.
 
 ## What a successful ingest means
 
-An ingest response with `status: "committed"` or `status: "duplicate"` means the complete batch
-is durable.
+An ingest response with `status: "committed"` or `status: "duplicate"` means the complete batch is durable.
 
-If the connection closes or times out before a response arrives, the result is unknown. Retry the
-same content with the same `(source, batch_id)`. The server returns the original receipt if the
-batch was already committed or commits it once if it was not.
+A lost connection or timeout leaves the client without a known result.
+Retry the same content with the same `(source, batch_id)`.
 
-HTTP 503 on ingest means the service cannot safely accept more writes. Restart it, allow the data
-directory to reopen, and then retry any ambiguous batch identically.
+The server returns the original receipt if the batch already committed.
+Otherwise, it commits the batch once.
+
+HTTP 503 means the active writer cannot safely accept more mutations.
+Restart the service and let Groundhog reopen the log before a retry.
 
 ## One writer per data directory
 
-Only one process may write a data directory at a time.
+Only one process can write a data directory at a time.
 
-- `serve` owns it while the service is running;
-- `seal` needs exclusive writer access;
-- `project`, `rebuild`, and `verify` may run while `serve` is active.
+- `serve` owns the writer while the service runs.
+- `seal` needs exclusive writer access.
+- `verify` can read while `serve` runs.
 
-If a command reports that the writer is held, stop the owning process and wait for it to exit. Do
-not delete files in the data directory to force access.
+If a command reports a held writer, stop the owning process and wait for exit.
+Do not delete lock files to force access.
 
 ## Sealing
 
-`seal` consolidates committed history into read-optimized immutable storage. It does not change
-event values, IDs, order, batch identities, or integrity commitments.
+`seal` consolidates committed history into immutable Parquet segments.
+It does not change event values, IDs, order, batch identities, or integrity commitments.
 
-Stop `serve` before sealing. Sealing does not refresh SQL or the catalog; run `project` separately
-when query freshness should advance.
+Stop `serve` before sealing.
+Restart the service after the command finishes.
 
 ## Coherent reads
 
-Replay, project, rebuild, and verify each use one coherent history frontier. Concurrent ingest
-cannot make one operation mix different points in history.
+Each replay, stream enumeration, and verification operation uses one coherent history frontier.
+Concurrent ingest cannot mix different frontiers in one finite response.
 
-A captured frontier may be behind a later append. Replay cursors and warehouse receipts identify
-the frontier used by a response.
+Finite replay identifies its captured frontier with `snapshot_through_event_id`.
+Stream enumeration uses the same field and supports an anchored `through` parameter for later pages.
+
+Follow starts with one coherent snapshot and then reads later committed events in order.
 
 ## Restart and recovery
 
 After a crash or unclean stop:
 
-1. confirm the previous process has exited;
-2. start `serve` with the same configuration;
-3. wait for a successful routed request;
-4. retry ambiguous batches with the same IDs and content; and
-5. run `verify` if the interruption requires an integrity check.
+1. Confirm that the previous process has exited.
+2. Start `serve` with the same configuration.
+3. Wait for a successful routed request.
+4. Retry ambiguous batches with the same IDs and content.
+5. Run `verify` when the interruption needs an integrity check.
 
-The binary refuses a data directory when it cannot identify one safe history. Do not edit stored
-files in an attempt to force recovery; preserve a copy and restore from a verified backup when
-necessary.
+The binary refuses a data directory when it cannot identify one safe history.
+Do not edit stored files to force recovery.
+
+Preserve a copy and restore from a verified backup when Groundhog refuses the only history.
+
+## Old warehouse files
+
+Groundhog 0.2 ignores these Groundhog 0.1 files:
+
+```text
+data/warehouse.duckdb
+data/warehouse.duckdb.publish.lock
+data/.warehouse.duckdb.candidate-*
+```
+
+Groundhog never deletes them automatically.
+They are not part of the event log and are not needed after the upgrade.
+
+Operators can delete them manually after they verify the 0.2 deployment and backup.
 
 ## Backup and restore
 
-The binary does not provide an online backup command. A conservative backup procedure is:
+Groundhog does not provide an online backup command.
+A conservative backup procedure is:
 
-1. stop `serve` cleanly;
-2. copy `groundhog.toml` and the durable log;
-3. restart the service; and
-4. periodically validate a restored copy.
+1. Stop `serve` cleanly.
+2. Copy `groundhog.toml` and `data/log/`.
+3. Restart the service.
+4. Validate a restored copy at regular intervals.
 
-Validate a restore in an isolated directory:
+Validate the restore in an isolated directory:
 
 ```sh
+groundhog verify --config ./restored/groundhog.toml
 groundhog verify --chain --config ./restored/groundhog.toml
-groundhog rebuild --config ./restored/groundhog.toml
 ```
 
-Then serve the restored instance on an isolated socket and compare expected receipts and query
-results.
+Then serve the restore on an isolated socket.
+Compare known replay events, stream summaries, and ingest receipts.
 
 ## See also
 
