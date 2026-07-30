@@ -5,8 +5,8 @@ The fixtures cover stable bytes, hashes, lifecycle rules, and conditional append
 
 The byte-format fixtures have two independent checks:
 
-1. `tests/vectors.rs` reads the committed fixtures and verifies the Rust implementation against
-   them.
+1. `crates/groundhog-cli/tests/vectors.rs` reads the fixtures and verifies the Rust
+   implementation against the committed fixtures.
 2. `verify.py` uses only the Python standard library and no Groundhog code. It checks every
    byte-format fixture. The Rust test also checks the Parquet schema and logical rows.
 
@@ -41,7 +41,7 @@ conflicting retries. A failed precondition does not reserve the batch ID.
 Run both checks from the repository root:
 
 ```sh
-cargo test --locked --test vectors
+cargo test --locked --package groundhog-cli --test vectors
 python3 tests/test-vectors/verify.py
 ```
 
