@@ -69,7 +69,8 @@
         "group": "Start here",
         "pages": [
           "index",
-          "guides/getting-started"
+          "guides/getting-started",
+          "releases/0.2.0"
         ]
       },
       {

@@ -12,6 +12,7 @@ This directory contains the Groundhog 0.2 manual in Markdown.
 ## Start here
 
 - [Getting started](guides/getting-started.md) covers local ingest, replay, follow, streams, and verification.
+- [Groundhog 0.2.0](releases/0.2.0.md) lists breaking changes and the upgrade procedure.
 - [groundhog(1)](references/cli.md) lists CLI options, commands, streams, and exit status.
 - [Configuration](references/configuration.md) lists every accepted `groundhog.toml` field.
 - [Deployment operations](operations/deployment.md) explains supervision, maintenance, backup, and upgrade.
