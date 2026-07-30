@@ -4,6 +4,9 @@ This public repository provides Groundhog downloads, user documentation, and pub
 contracts. The private [`GroundSystems/groundhog-src`](https://github.com/GroundSystems/groundhog-src)
 repository contains the canonical Groundhog source.
 
+Groundhog 0.2 stores and serves a durable append-only event log. Applications use replay or
+follow to build their own derived views. Groundhog does not include local SQL or a warehouse.
+
 ## Support and feature requests
 
 Use [GitHub Issues](https://github.com/GroundSystems/groundhog/issues) for support requests
@@ -15,8 +18,8 @@ and feature requests. This public repository does not use GitHub Projects.
 brew install GroundSystems/groundhog/groundhog
 ```
 
-The formula is maintained in
-[`GroundSystems/homebrew-groundhog`](https://github.com/GroundSystems/homebrew-groundhog).
+[`GroundSystems/homebrew-groundhog`](https://github.com/GroundSystems/homebrew-groundhog)
+maintains the formula.
 
 ## Direct downloads
 
@@ -27,18 +30,18 @@ third-party license notices.
 
 ## Documentation
 
-The Groundhog manual is maintained in [`docs/`](docs/). Its `docs.json` configuration is ready
+This repository maintains the Groundhog manual in [`docs/`](docs/). Its `docs.json` configuration is ready
 for a Mintlify deployment using `/docs` as the documentation path.
 
 ## Published contract
 
-The [`spec/`](spec/) contract and [`tests/test-vectors/`](tests/test-vectors/) compatibility
-vectors are generated copies from `GroundSystems/groundhog-src`. Do not edit these published
+The private `GroundSystems/groundhog-src` repository generates the [`spec/`](spec/) contract and
+[`tests/test-vectors/`](tests/test-vectors/) compatibility vectors. Do not edit these published
 copies directly. [`spec/publication-manifest.json`](spec/publication-manifest.json) lists every
 file selected for publication.
 
 ## License
 
-The documentation and other repository contents are licensed under the
-[Functional Source License, Version 1.1, ALv2 Future License](LICENSE.md). Release archives
+The [Functional Source License, Version 1.1, ALv2 Future License](LICENSE.md) covers the
+documentation and other repository contents. Release archives
 contain the license and third-party notices applicable to the included binary.
