@@ -1,0 +1,127 @@
+{
+  "note": "Each scenario starts from its stated independent admission state. The precondition is not committed content.",
+  "source": "example",
+  "batch_id": "conditional-contacts-002",
+  "events": [
+    {
+      "stream": "contacts",
+      "record_key": "contact-42",
+      "kind": "upserted",
+      "occurred_at": "2026-07-12T11:00:00Z",
+      "payload_input": "{\"plan\":\"enterprise\",\"name\":\"Ada\"}",
+      "payload_canonical": "{\"name\":\"Ada\",\"plan\":\"enterprise\"}",
+      "content_hash": "8df69abcc8afe3e73b32d30bf3204d75389149c1c6db3a50f821b8bf2d31b301"
+    },
+    {
+      "stream": "contacts",
+      "record_key": "contact-43",
+      "kind": "deleted",
+      "occurred_at": null,
+      "payload_input": "{\"reason\":\"merged\"}",
+      "payload_canonical": "{\"reason\":\"merged\"}",
+      "content_hash": "f156c41f543bb5c53c82701997bb6a3acbd6edb216d241dec54c6857d0a0658f"
+    }
+  ],
+  "descriptors": [
+    {
+      "stream": "contacts",
+      "record_key": "contact-42",
+      "kind": "upserted",
+      "content_hash": "8df69abcc8afe3e73b32d30bf3204d75389149c1c6db3a50f821b8bf2d31b301",
+      "occurred_at": "2026-07-12T11:00:00Z"
+    },
+    {
+      "stream": "contacts",
+      "record_key": "contact-43",
+      "kind": "deleted",
+      "content_hash": "f156c41f543bb5c53c82701997bb6a3acbd6edb216d241dec54c6857d0a0658f"
+    }
+  ],
+  "digest_preimage": "{\"events\":[{\"content_hash\":\"8df69abcc8afe3e73b32d30bf3204d75389149c1c6db3a50f821b8bf2d31b301\",\"kind\":\"upserted\",\"occurred_at\":\"2026-07-12T11:00:00Z\",\"record_key\":\"contact-42\",\"stream\":\"contacts\"},{\"content_hash\":\"f156c41f543bb5c53c82701997bb6a3acbd6edb216d241dec54c6857d0a0658f\",\"kind\":\"deleted\",\"record_key\":\"contact-43\",\"stream\":\"contacts\"}],\"source\":\"example\",\"v\":1}",
+  "batch_digest": "26c73a100a24e3cbebc0b2b4fb92beff819213eee578524135a40095c7ed32d6",
+  "request_variants": [
+    {
+      "name": "unconditional",
+      "stream_precondition": null,
+      "canonical_request": "{\"batch_id\":\"conditional-contacts-002\",\"events\":[{\"kind\":\"upserted\",\"occurred_at\":\"2026-07-12T11:00:00Z\",\"payload\":{\"name\":\"Ada\",\"plan\":\"enterprise\"},\"record_key\":\"contact-42\",\"stream\":\"contacts\"},{\"kind\":\"deleted\",\"payload\":{\"reason\":\"merged\"},\"record_key\":\"contact-43\",\"stream\":\"contacts\"}],\"source\":\"example\",\"v\":1}",
+      "batch_digest": "26c73a100a24e3cbebc0b2b4fb92beff819213eee578524135a40095c7ed32d6"
+    },
+    {
+      "name": "expected_frontier_a",
+      "stream_precondition": {
+        "stream": "contacts",
+        "expected_frontier": "01978c1e-9000-7000-8000-000000000010"
+      },
+      "canonical_request": "{\"batch_id\":\"conditional-contacts-002\",\"events\":[{\"kind\":\"upserted\",\"occurred_at\":\"2026-07-12T11:00:00Z\",\"payload\":{\"name\":\"Ada\",\"plan\":\"enterprise\"},\"record_key\":\"contact-42\",\"stream\":\"contacts\"},{\"kind\":\"deleted\",\"payload\":{\"reason\":\"merged\"},\"record_key\":\"contact-43\",\"stream\":\"contacts\"}],\"source\":\"example\",\"stream_precondition\":{\"expected_frontier\":\"01978c1e-9000-7000-8000-000000000010\",\"stream\":\"contacts\"},\"v\":1}",
+      "batch_digest": "26c73a100a24e3cbebc0b2b4fb92beff819213eee578524135a40095c7ed32d6"
+    },
+    {
+      "name": "expected_frontier_b",
+      "stream_precondition": {
+        "stream": "contacts",
+        "expected_frontier": "01978c1e-9000-7000-8000-000000000011"
+      },
+      "canonical_request": "{\"batch_id\":\"conditional-contacts-002\",\"events\":[{\"kind\":\"upserted\",\"occurred_at\":\"2026-07-12T11:00:00Z\",\"payload\":{\"name\":\"Ada\",\"plan\":\"enterprise\"},\"record_key\":\"contact-42\",\"stream\":\"contacts\"},{\"kind\":\"deleted\",\"payload\":{\"reason\":\"merged\"},\"record_key\":\"contact-43\",\"stream\":\"contacts\"}],\"source\":\"example\",\"stream_precondition\":{\"expected_frontier\":\"01978c1e-9000-7000-8000-000000000011\",\"stream\":\"contacts\"},\"v\":1}",
+      "batch_digest": "26c73a100a24e3cbebc0b2b4fb92beff819213eee578524135a40095c7ed32d6"
+    },
+    {
+      "name": "expected_absent",
+      "stream_precondition": {
+        "stream": "contacts",
+        "expected_frontier": null
+      },
+      "canonical_request": "{\"batch_id\":\"conditional-contacts-002\",\"events\":[{\"kind\":\"upserted\",\"occurred_at\":\"2026-07-12T11:00:00Z\",\"payload\":{\"name\":\"Ada\",\"plan\":\"enterprise\"},\"record_key\":\"contact-42\",\"stream\":\"contacts\"},{\"kind\":\"deleted\",\"payload\":{\"reason\":\"merged\"},\"record_key\":\"contact-43\",\"stream\":\"contacts\"}],\"source\":\"example\",\"stream_precondition\":{\"expected_frontier\":null,\"stream\":\"contacts\"},\"v\":1}",
+      "batch_digest": "26c73a100a24e3cbebc0b2b4fb92beff819213eee578524135a40095c7ed32d6"
+    }
+  ],
+  "admission_scenarios": [
+    {
+      "name": "matching_frontier",
+      "variant": "expected_frontier_a",
+      "actual_frontier": "01978c1e-9000-7000-8000-000000000010",
+      "existing_batch_digest": null,
+      "outcome": "committed",
+      "reserves_batch_id": true
+    },
+    {
+      "name": "mismatched_frontier",
+      "variant": "expected_frontier_b",
+      "actual_frontier": "01978c1e-9000-7000-8000-000000000010",
+      "existing_batch_digest": null,
+      "outcome": "stream_frontier_conflict",
+      "reserves_batch_id": false
+    },
+    {
+      "name": "absent_required_on_empty_stream",
+      "variant": "expected_absent",
+      "actual_frontier": null,
+      "existing_batch_digest": null,
+      "outcome": "committed",
+      "reserves_batch_id": true
+    },
+    {
+      "name": "absent_required_on_present_stream",
+      "variant": "expected_absent",
+      "actual_frontier": "01978c1e-9000-7000-8000-000000000010",
+      "existing_batch_digest": null,
+      "outcome": "stream_frontier_conflict",
+      "reserves_batch_id": false
+    },
+    {
+      "name": "identical_retry_precedes_stale_precondition",
+      "variant": "expected_frontier_a",
+      "actual_frontier": "01978c1e-9000-7000-8000-000000000011",
+      "existing_batch_digest": "26c73a100a24e3cbebc0b2b4fb92beff819213eee578524135a40095c7ed32d6",
+      "outcome": "duplicate",
+      "reserves_batch_id": false
+    },
+    {
+      "name": "conflicting_retry_precedes_precondition",
+      "variant": "expected_frontier_a",
+      "actual_frontier": "01978c1e-9000-7000-8000-000000000010",
+      "existing_batch_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "outcome": "batch_id_conflict",
+      "reserves_batch_id": false
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "source": "stripe",
+  "batch_id_not_in_digest": "stripe-run-118",
+  "descriptors": [
+    {
+      "stream": "customers",
+      "record_key": "cus_1",
+      "kind": "upserted",
+      "content_hash": "1f3bd02b1d38c4cb9fe4002da9c9f5e43ca05930b54b7e872b4e55dbdfb6baf6",
+      "occurred_at": "2026-07-07T08:58:41.5Z"
+    },
+    {
+      "stream": "customers",
+      "record_key": "cus_2",
+      "kind": "upserted",
+      "content_hash": "107b328f6e66f7be73e45ef98a723cf1f257abfa2ef37746273f5a204836957a"
+    },
+    {
+      "stream": "customers",
+      "record_key": "cus_2",
+      "kind": "deleted",
+      "content_hash": "9bf0a6486997c2cf41f10ee22a8355f6eb40de7d044f77c85f86d1ccaa41706c"
+    }
+  ],
+  "digest_preimage": "{\"events\":[{\"content_hash\":\"1f3bd02b1d38c4cb9fe4002da9c9f5e43ca05930b54b7e872b4e55dbdfb6baf6\",\"kind\":\"upserted\",\"occurred_at\":\"2026-07-07T08:58:41.5Z\",\"record_key\":\"cus_1\",\"stream\":\"customers\"},{\"content_hash\":\"107b328f6e66f7be73e45ef98a723cf1f257abfa2ef37746273f5a204836957a\",\"kind\":\"upserted\",\"record_key\":\"cus_2\",\"stream\":\"customers\"},{\"content_hash\":\"9bf0a6486997c2cf41f10ee22a8355f6eb40de7d044f77c85f86d1ccaa41706c\",\"kind\":\"deleted\",\"record_key\":\"cus_2\",\"stream\":\"customers\"}],\"source\":\"stripe\",\"v\":1}",
+  "batch_digest": "77a9f8581b037291b8371ba8007925ac75bd382be1e2aae3330d2f262d68b254"
+}

@@ -1,0 +1,194 @@
+:root {
+  --ground-limestone: #faf8f3;
+  --ground-paper: #fffdf8;
+  --ground-shelf: #f3eee4;
+  --ground-ink: #1b160f;
+  --ground-silt: #766b5b;
+  --ground-contour: #e3dbcb;
+  --ground-oxide: #bc3e1d;
+  --ground-bedrock: #131009;
+  --ground-bedrock-raised: #1b1711;
+  --ground-bedrock-deep: #0e0c08;
+  --ground-dark-contour: #342c22;
+  --ground-chalk: #ede7da;
+  --ground-chalk-dim: #aaa08f;
+  --ground-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  --ground-serif: "Iowan Old Style", Palatino, "Book Antiqua", Georgia, serif;
+}
+
+::selection {
+  color: var(--ground-limestone);
+  background: var(--ground-oxide);
+}
+
+body,
+#background-color,
+#body-content {
+  background-color: var(--ground-limestone);
+}
+
+body {
+  color: var(--ground-ink);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='%231B160F' opacity='.025'%3E%3Ccircle cx='13' cy='19' r='.9'/%3E%3Ccircle cx='47' cy='8' r='.7'/%3E%3Ccircle cx='83' cy='26' r='.9'/%3E%3Ccircle cx='109' cy='57' r='.7'/%3E%3Ccircle cx='27' cy='63' r='.8'/%3E%3Ccircle cx='65' cy='49' r='.7'/%3E%3Ccircle cx='95' cy='88' r='.9'/%3E%3Ccircle cx='41' cy='101' r='.8'/%3E%3Ccircle cx='9' cy='90' r='.7'/%3E%3Ccircle cx='71' cy='112' r='.8'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+#navbar {
+  background-color: color-mix(in srgb, var(--ground-limestone) 94%, transparent);
+  border-color: var(--ground-contour);
+  backdrop-filter: blur(12px);
+}
+
+#sidebar,
+#sidebar-content {
+  background-color: var(--ground-shelf);
+}
+
+#sidebar {
+  border-right: 1px solid var(--ground-contour);
+}
+
+#content-area {
+  box-sizing: border-box;
+  background-color: var(--ground-paper);
+  border-right: 1px solid var(--ground-contour);
+  border-left: 1px solid var(--ground-contour);
+  box-shadow: 0 0 36px rgb(53 42 25 / 4%);
+  padding-right: clamp(1.35rem, 3vw, 2.5rem);
+  padding-left: clamp(1.35rem, 3vw, 2.5rem);
+}
+
+#table-of-contents,
+#table-of-contents-layout,
+#table-of-contents-content {
+  background-color: var(--ground-limestone);
+}
+
+#sidebar,
+#table-of-contents,
+button,
+code,
+pre {
+  font-family: var(--ground-mono);
+}
+
+#sidebar,
+#table-of-contents {
+  color: var(--ground-silt);
+}
+
+#page-title {
+  color: var(--ground-ink);
+  font-family: var(--ground-serif);
+  font-size: clamp(2.2rem, 4vw, 3.15rem);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+#content h2,
+#content h3,
+#content h4 {
+  color: var(--ground-ink);
+  font-family: var(--ground-serif);
+  font-weight: 500;
+}
+
+#content h2 {
+  padding-top: 0.35em;
+  border-top: 1px solid var(--ground-contour);
+}
+
+#content p,
+#content li {
+  line-height: 1.75;
+}
+
+#content a {
+  text-decoration-color: var(--ground-oxide);
+  text-underline-offset: 0.18em;
+}
+
+#content blockquote,
+callout {
+  border-color: var(--ground-contour);
+}
+
+#content table {
+  border-color: var(--ground-contour);
+}
+
+#content thead {
+  border-bottom-color: var(--ground-ink);
+}
+
+#topbar-cta-button {
+  border-radius: 0;
+}
+
+.dark body,
+.dark #background-color,
+.dark #body-content {
+  color: var(--ground-chalk);
+  background-color: var(--ground-bedrock);
+}
+
+.dark body {
+  background-image: none;
+}
+
+.dark #navbar {
+  background-color: color-mix(in srgb, var(--ground-bedrock) 94%, transparent);
+  border-color: var(--ground-dark-contour);
+}
+
+.dark #sidebar,
+.dark #sidebar-content {
+  color: var(--ground-chalk-dim);
+  background-color: var(--ground-bedrock-deep);
+}
+
+.dark #sidebar {
+  border-right-color: var(--ground-dark-contour);
+}
+
+.dark #content-area {
+  color: var(--ground-chalk);
+  background-color: var(--ground-bedrock-raised);
+  border-color: var(--ground-dark-contour);
+  box-shadow: 0 0 42px rgb(0 0 0 / 18%);
+}
+
+.dark #table-of-contents,
+.dark #table-of-contents-layout,
+.dark #table-of-contents-content {
+  color: var(--ground-chalk-dim);
+  background-color: var(--ground-bedrock);
+}
+
+.dark #page-title,
+.dark #content h2,
+.dark #content h3,
+.dark #content h4 {
+  color: var(--ground-chalk);
+}
+
+.dark #content h2 {
+  border-top-color: var(--ground-dark-contour);
+}
+
+.dark #content blockquote,
+.dark callout,
+.dark #content table {
+  border-color: var(--ground-dark-contour);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
