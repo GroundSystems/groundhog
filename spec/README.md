@@ -48,10 +48,7 @@ Both implementations MUST preserve the shared external behavior.
 Authentication, authorization, tenancy, deployment, backup, and connector management are outside
 the shared contract. An implementation MAY add these functions around the shared operations.
 
-## Local contract
-
-The local contract covers query, catalog, projection receipts, and projection lag. These functions
-depend on the local DuckDB projection and are not part of the shared Cloud contract.
+## Local storage contract
 
 The storage contract applies only to compatible local Groundhog data directories. It does not
 require Groundhog Cloud to use the same storage format.

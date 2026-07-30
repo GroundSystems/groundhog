@@ -11,7 +11,6 @@
     "spec/lifecycle.md",
     "spec/replay.md",
     "spec/streams.md",
-    "spec/local-query.md",
     "spec/storage.md",
     "spec/compatibility-vectors.md",
     "spec/errors.md",

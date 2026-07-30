@@ -74,7 +74,7 @@ A mismatch MUST NOT reserve `(source, batch_id)`. The client can retry that key 
 content after it gets new state.
 
 Groundhog MUST NOT store the precondition in committed events. The precondition does not affect
-the batch digest, replay, projection, rebuild, or verification.
+the batch digest, replay, or verification.
 
 ## Admission order
 

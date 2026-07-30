@@ -96,20 +96,6 @@ Groundhog MAY add more specific item codes later.
 The response SHOULD include every invalid event that Groundhog can identify without mutation. The
 complete batch still fails atomically.
 
-## Local query codes
-
-These codes apply only to the local query and catalog contract:
-
-| Code | HTTP status | Meaning |
-| --- | ---: | --- |
-| `invalid_query_request` | 400 | The query envelope is invalid. |
-| `query_rejected` | 400 | SQL confinement, binding, execution, or rendering rejected the query. |
-| `invalid_catalog_request` | 400 | A catalog parameter is invalid. |
-| `query_timeout` | 408 | The engine confirmed timeout cancellation. |
-| `catalog_unavailable` | 500 | The published catalog generation cannot be read. |
-
-Engine diagnostic text belongs in `message`. Its exact text is not stable.
-
 ## SDK behavior
 
 An SDK error type SHOULD expose the HTTP status, machine code, message, and structured members. It

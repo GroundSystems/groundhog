@@ -32,7 +32,7 @@ An `after` cursor requires `through`. Groundhog MUST reject `after` without `thr
 
 ## Enumeration snapshot
 
-Groundhog reads committed log state directly. It MUST NOT use the local warehouse projection.
+Groundhog reads committed log state directly.
 
 Without `through`, Groundhog captures the current durable frontier. With `through`, Groundhog uses
 that inclusive historical frontier.
@@ -79,5 +79,4 @@ logical enumeration snapshot.
 The anchor does not require server-side cursor state. It remains valid after a seal or process
 restart while the committed event remains available.
 
-Rows contain no payloads, paths, integrity claims, or liveness status. Local catalog state is a
-separate projection view and can lag this durable enumeration.
+Rows contain no payloads, paths, integrity claims, or liveness status.

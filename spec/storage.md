@@ -28,8 +28,7 @@ log/
 └── segments/
 ```
 
-`manifest.jsonl`, `tail.ndjson`, `pending/`, and `segments/` are required entries. The warehouse
-file is derived state and is not part of the durable log.
+`manifest.jsonl`, `tail.ndjson`, `pending/`, and `segments/` are required entries.
 
 The logical log concatenates these inputs in increasing `event_id` order:
 

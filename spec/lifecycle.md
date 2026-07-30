@@ -37,7 +37,7 @@ The retirement payload MUST match
 [`schemas/retirement-payload.schema.json`](schemas/retirement-payload.schema.json). Its
 `final_frontier` is the latest committed event for the retired source.
 
-The retirement event is an ordinary committed event. Replay and local projection include it. Its
+The retirement event is an ordinary committed event. Replay includes it. Its
 hashes, batch commitment, and integrity-chain position follow the normal rules.
 
 The retirement response uses HTTP 200. It MUST match
