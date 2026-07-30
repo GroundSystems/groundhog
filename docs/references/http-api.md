@@ -295,5 +295,4 @@ query results. Sending their media types, routes, or formats does not activate p
 [`serve`](/commands#serve),
 [configuration](/references/configuration),
 [events](/concepts/events),
-[warehouse](/concepts/warehouse),
 [getting started](/guides/getting-started)

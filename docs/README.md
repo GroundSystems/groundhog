@@ -46,7 +46,6 @@ repository. Do not edit these copies directly. The
 |---|---|
 | [Events](concepts/events.md) | Event fields, kinds, identity, ordering, and batches. |
 | [Storage](concepts/storage.md) | Durability, writer ownership, sealing, recovery, and backup. |
-| [Warehouse](concepts/warehouse.md) | Publication, relations, receipts, catalog, and SQL. |
 | [HTTP API](references/http-api.md) | Transport, authentication, routes, limits, and retries. |
 | [Deployment](operations/deployment.md) | Ownership, freshness, maintenance order, and supervision. |
 | [Verification and recovery](operations/verification-and-recovery.md) | Failure model, verification depth, and safe recovery. |

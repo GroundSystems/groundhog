@@ -83,8 +83,7 @@
         "group": "Understand the system",
         "pages": [
           "concepts/events",
-          "concepts/storage",
-          "concepts/warehouse"
+          "concepts/storage"
         ]
       },
       {

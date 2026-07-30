@@ -92,5 +92,4 @@ results.
 
 [`seal`](/commands#seal),
 [`verify`](/commands#verify),
-[Warehouse](/concepts/warehouse),
 [Deployment operations](/operations/deployment)

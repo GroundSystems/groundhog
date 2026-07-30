@@ -171,5 +171,4 @@ groundhog verify --chain --config ./instance/groundhog.toml
 [configuration](/references/configuration),
 [events](/concepts/events),
 [storage](/concepts/storage),
-[warehouse](/concepts/warehouse),
 [deployment operations](/operations/deployment)

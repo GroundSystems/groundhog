@@ -215,8 +215,6 @@ Standard output is empty. Standard error reports `rebuilt <warehouse-path>`.
 groundhog rebuild --config ./instance/groundhog.toml
 ```
 
-See [Warehouse](/concepts/warehouse).
-
 ## `verify`
 
 ```text

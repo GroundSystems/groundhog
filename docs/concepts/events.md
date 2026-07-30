@@ -104,5 +104,4 @@ batch with the same ID. Creating a new ID for the retry can duplicate history.
 
 [HTTP API](/references/http-api),
 [Storage](/concepts/storage),
-[Warehouse](/concepts/warehouse),
 [Getting started](/guides/getting-started)
