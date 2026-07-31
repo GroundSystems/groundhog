@@ -35,14 +35,30 @@ The [groundhog commands](commands.md) page documents all commands.
 | [`seal`](commands.md#seal) | Move the append tail into immutable Parquet segments. |
 | [`verify`](commands.md#verify) | Verify storage and optional chain integrity. |
 
+## Documentation ownership
+
+This repository owns `docs.json`, navigation, branding, redirects, guides, and release notes.
+
+Buildkite imports these generated paths:
+
+| path | owner |
+|---|---|
+| `commands.md` | `GroundSystems/groundhog-src` |
+| `concepts/` | `GroundSystems/groundhog-src` |
+| `operations/` | `GroundSystems/groundhog-src` |
+| `references/` | `GroundSystems/groundhog-src` |
+| `sdks/` | `GroundSystems/groundhog-sdk-python` |
+
+The root [`docs-sources.lock.json`](../docs-sources.lock.json) file records source commits and
+published hashes. Edit generated pages in their owning repositories.
+
 ## Published interface
 
 [`openapi.yaml`](../openapi.yaml) is the authoritative HTTP contract. The
 [verification directory](../verify/README.md) contains the public conformance tools, black-box
 checks, and compatibility fixtures.
 
-`GroundSystems/groundhog-src` publishes these files to the public repository. Contributors edit
-the canonical files only in the private source repository.
+`GroundSystems/groundhog-src` publishes the public contract and verification files separately.
 
 ## System pages
 
