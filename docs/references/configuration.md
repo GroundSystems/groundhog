@@ -3,6 +3,11 @@ title: Configuration
 description: All fields accepted by Groundhog 0.2 in groundhog.toml.
 ---
 
+<!-- generated-doc: GroundSystems/groundhog-src -->
+> Source: [`GroundSystems/groundhog-src/docs-export/references/configuration.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/references/configuration.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
+> Edit the source file. Do not edit this generated copy.
+
+
 Groundhog reads one TOML file for each deployment.
 The default path is `./groundhog.toml`.
 

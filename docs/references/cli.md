@@ -3,6 +3,11 @@ title: groundhog(1)
 description: Groundhog 0.2 CLI synopsis, options, commands, streams, and exit status.
 ---
 
+<!-- generated-doc: GroundSystems/groundhog-src -->
+> Source: [`GroundSystems/groundhog-src/docs-export/references/cli.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/references/cli.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
+> Edit the source file. Do not edit this generated copy.
+
+
 ## Name
 
 `groundhog`: maintain and serve a durable append-only event log.

@@ -3,6 +3,11 @@ title: Deployment operations
 description: Deploy, supervise, maintain, upgrade, and back up one Groundhog 0.2 instance.
 ---
 
+<!-- generated-doc: GroundSystems/groundhog-src -->
+> Source: [`GroundSystems/groundhog-src/docs-export/operations/deployment.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/operations/deployment.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
+> Edit the source file. Do not edit this generated copy.
+
+
 ## Name
 
 `groundhog-operations`: operate one durable event-log instance.

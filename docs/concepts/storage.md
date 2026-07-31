@@ -3,6 +3,11 @@ title: Storage and durability
 description: Understand log durability, Parquet segments, writer ownership, recovery, and backup.
 ---
 
+<!-- generated-doc: GroundSystems/groundhog-src -->
+> Source: [`GroundSystems/groundhog-src/docs-export/concepts/storage.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/concepts/storage.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
+> Edit the source file. Do not edit this generated copy.
+
+
 Users interact with Groundhog through the CLI and HTTP API.
 Do not edit files under the configured data directory.
 

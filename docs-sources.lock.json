@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "GroundSystems/groundhog-sdk-python": {
+      "commit": "89f24881b7c2369fc752c1d83faa6a5507f0e891",
+      "files": {
+        "docs/sdks/python.md": {
+          "source": "docs-export/python.md",
+          "sha256": "sha256:14f4b2778094d076f52c9e3a5e50888963162163a3a6e841ea32b33032d88199"
+        }
+      }
+    },
+    "GroundSystems/groundhog-src": {
+      "commit": "29b0fa4fc92fd4d4902533e4a714b1be97686eb9",
+      "files": {
+        "docs/commands.md": {
+          "source": "docs-export/commands.md",
+          "sha256": "sha256:29d7e4bb6e0494cc6ce6e84278dbad50ef71259a1d49578aae3da7a9b9d33fb4"
+        },
+        "docs/concepts/events.md": {
+          "source": "docs-export/concepts/events.md",
+          "sha256": "sha256:139ed7a3767717defc8b669040749281a0bdd2ad2133fb32e722a0fa7114ab9b"
+        },
+        "docs/concepts/storage.md": {
+          "source": "docs-export/concepts/storage.md",
+          "sha256": "sha256:28dc9c2726514beecde8a41a9622bd0c6c2ba3692b70542989c983150bb41dd5"
+        },
+        "docs/operations/deployment.md": {
+          "source": "docs-export/operations/deployment.md",
+          "sha256": "sha256:e7bccaefdaf61db37fdf31e8f0cf4dcf97881e7e98cd442352d9a9fa39ba4cab"
+        },
+        "docs/operations/verification-and-recovery.md": {
+          "source": "docs-export/operations/verification-and-recovery.md",
+          "sha256": "sha256:eae4b9fbd4649f3a952e500ba050b4664ae6d8c523a33e0baf0768779f296f84"
+        },
+        "docs/references/cli.md": {
+          "source": "docs-export/references/cli.md",
+          "sha256": "sha256:ae7918bc61aff1288ca35c2ba44ad1f7262ac6c33c4d85d2151f784c69e4097a"
+        },
+        "docs/references/configuration.md": {
+          "source": "docs-export/references/configuration.md",
+          "sha256": "sha256:74ea800cee512104f7303fa8011c6a22159549b3b82de82d9cad13f778575efa"
+        },
+        "docs/references/http-api.md": {
+          "source": "docs-export/references/http-api.md",
+          "sha256": "sha256:81a2c66bd449950a82d11a727c498cdb219a21d060fa443b21e036d96ebd2b32"
+        }
+      }
+    }
+  }
+}

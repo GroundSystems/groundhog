@@ -3,6 +3,11 @@ title: Events
 description: Understand the event data that connectors submit and consumers process.
 ---
 
+<!-- generated-doc: GroundSystems/groundhog-src -->
+> Source: [`GroundSystems/groundhog-src/docs-export/concepts/events.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/concepts/events.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
+> Edit the source file. Do not edit this generated copy.
+
+
 Groundhog stores changes from connected systems as one ordered event history.
 Connectors submit events.
 Consumers replay events, follow new commits, and build their own derived views.
