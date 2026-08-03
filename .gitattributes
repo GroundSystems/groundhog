@@ -1,5 +1,2 @@
-docs/commands.md linguist-generated=true
-docs/concepts/** linguist-generated=true
-docs/operations/** linguist-generated=true
-docs/references/** linguist-generated=true
+docs/groundhog/** linguist-generated=true
 docs/sdks/** linguist-generated=true
