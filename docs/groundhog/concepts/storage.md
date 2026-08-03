@@ -56,8 +56,9 @@ Sealing writes one immutable Parquet segment to
 `segments/<first_event_id>_<last_event_id>_<sha256>.parquet`. The file hash, manifest range, row
 count, event order, and batch partition must agree.
 
-Each segment stores event columns in this order: `event_id`, `source`, `stream`, `record_key`,
-`kind`, `occurred_at`, `observed_at`, `payload`, `content_hash`, `batch_id`, and `event_hash`.
+Each segment uses Zstandard compression and stores event columns in this order: `event_id`,
+`source`, `stream`, `record_key`, `kind`, `occurred_at`, `observed_at`, `payload`,
+`content_hash`, `batch_id`, and `event_hash`.
 Groundhog can select valid Parquet encodings without reproducing identical segment bytes.
 
 The manifest LF commit makes the segment authoritative. Before that commit, the pending generation
@@ -105,7 +106,7 @@ Restart the service after the command finishes.
 
 ## Coherent reads
 
-Each replay, stream enumeration, and verification operation uses one coherent history frontier.
+Each replay, stream enumeration, and verification operation uses one coherent history snapshot.
 Concurrent ingest cannot mix different frontiers in one finite response.
 
 Finite replay identifies its captured frontier with `snapshot_through_event_id`.

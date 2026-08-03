@@ -9,7 +9,7 @@ The default path is `./groundhog.toml`.
 Pass another path with the global `--config <PATH>` option.
 Relative paths in the file resolve against the file's directory.
 
-Groundhog validates configuration before it opens deployment data, locks, or sockets.
+`serve`, `seal`, and `verify` validate configuration before they open deployment data, locks, or sockets.
 Unknown sections and keys are errors.
 
 ## Generated configuration
@@ -21,18 +21,18 @@ Unknown sections and keys are errors.
 dir = "./data"
 
 [security]
-mode = "open"
+mode = "open"              # open | governed | locked — this build serves only "open"
 
 [integrity]
-anchor = "none"
+anchor = "none"   # this binary supports only unsigned local chain heads
 
 [server]
-socket = "data/ground.sock"
-token = ""
+socket = "data/ground.sock"   # the binary's only transport
+token = ""                    # empty = no auth (local development)
 
 [replay]
 default_limit = 1000
-max_limit = 100000
+max_limit     = 100000
 ```
 
 ## `[data]`
@@ -64,8 +64,9 @@ The configured chain-head anchoring contract.
 Default: `none`.
 
 Accepted names are `none`, `signed`, `mirrored`, and `witnessed`.
-Groundhog 0.2 supports only `none`.
-It refuses stronger modes with exit code 4.
+`serve`, `seal`, and `verify --chain` support only `none`.
+They refuse each non-`none` mode with exit code 4.
+Plain `verify` checks storage without enforcing this field.
 
 ## `[server]`
 

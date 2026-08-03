@@ -49,7 +49,7 @@ Groundhog 0.2 removes `project` and `rebuild`.
 
 | command | log access | can run with live `serve` |
 |---|---|---:|
-| `init` | creates or validates | no |
+| `init` | creates or validates | an exact retry can |
 | `serve` | writer | it is the service |
 | `seal` | writer | no |
 | `verify` | coherent reader | yes |
@@ -89,6 +89,9 @@ It ignores warehouse files left by Groundhog 0.1.
 
 The configuration file sets the data directory, security mode, integrity anchor, server socket, bearer token, and replay limits.
 Groundhog rejects unknown keys.
+
+`serve`, `seal`, and `verify --chain` support only anchor mode `none`.
+Plain `verify` checks storage without enforcing the configured anchor mode.
 
 The removed `[query]` section produces this error:
 

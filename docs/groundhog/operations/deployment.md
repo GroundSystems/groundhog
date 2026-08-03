@@ -30,7 +30,7 @@ They use replay or follow to update their own databases and analytical systems.
    groundhog init /srv/ground/acme
    ```
 
-2. Review `/srv/ground/acme/groundhog.toml`, its token, and filesystem permissions.
+2. Review `/srv/ground/acme/groundhog.toml`, its optional token, and filesystem permissions.
 
 3. Start the service.
 
@@ -41,8 +41,12 @@ They use replay or follow to update their own databases and analytical systems.
 4. Wait for a successful routed request.
 
    ```sh
-   curl --unix-socket /srv/ground/acme/data/ground.sock http://ground/v1/streams
+   curl --unix-socket /srv/ground/acme/data/ground.sock \
+     -H 'Authorization: Bearer <token>' \
+     http://ground/v1/streams
    ```
+
+   Omit the `Authorization` header when the configuration contains an empty token.
 
 5. Configure connectors to submit stable idempotent batches to `POST /v1/events`.
 
@@ -99,13 +103,18 @@ Groundhog does not seal on configured age or size thresholds.
 Use this maintenance sequence:
 
 1. Stop `serve` with `SIGTERM` and wait for exit.
-2. Run `groundhog seal`.
-3. Run `groundhog verify --chain` when the maintenance policy requires it.
+2. Run `groundhog seal --config /srv/ground/acme/groundhog.toml`.
+3. Run the deep verification command when the policy requires it.
+
+   ```sh
+   groundhog verify --chain --config /srv/ground/acme/groundhog.toml
+   ```
+
 4. Restart `serve`.
 5. Probe a routed endpoint.
 
-An empty tail makes `seal` return exit code 1.
-Treat this result as no work only when the operator expects no pending events.
+An empty tail with no uncovered pending generation makes `seal` return exit code 1.
+Treat this result as no work only when the operator expects no unsealed events.
 
 Sealing creates immutable Parquet log segments.
 It does not change the logical event history.
@@ -197,8 +206,9 @@ Do not bypass compatibility checks or edit storage metadata.
 Groundhog runs in the operator's infrastructure.
 Protect the configuration, socket parent, data directory, backups, and process account.
 
-A bearer token protects API requests.
-It does not encrypt owner-readable files or provide governed operation.
+A configured bearer token protects API requests.
+An empty token disables HTTP authentication.
+The token does not encrypt owner-readable files or provide governed operation.
 
 Do not expose the socket through a remote service without suitable transport security, access control, and operational limits.
 

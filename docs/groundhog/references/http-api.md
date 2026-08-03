@@ -23,9 +23,10 @@ curl --unix-socket data/ground.sock http://ground/v1/streams
 
 Request and response bodies use UTF-8 JSON unless a follow response uses NDJSON.
 
-A request body accepts `Content-Type: application/json` or no content type.
-Groundhog accepts the optional `charset=utf-8` parameter.
-Other parameters, media types, or content encodings return 415 before Groundhog reads the body.
+The two `POST` routes accept `Content-Type: application/json` or no content type.
+Groundhog accepts `charset=utf-8` as the only optional parameter.
+Other parameters or media types return 415 before Groundhog reads the body.
+Any `Content-Encoding` header also returns 415 before body reading.
 
 ## Authentication
 
@@ -33,6 +34,14 @@ If `[server].token` is not empty, every request needs:
 
 ```text
 Authorization: Bearer <token>
+```
+
+Use this command to supply the header with `curl`:
+
+```sh
+curl --unix-socket data/ground.sock \
+  -H 'Authorization: Bearer <token>' \
+  http://ground/v1/streams
 ```
 
 A missing or incorrect token returns:
@@ -74,8 +83,10 @@ Errors use a stable code and a separate message:
 }
 ```
 
-Clients must match `error` and HTTP status.
-They must not match `message` text.
+Clients must use the HTTP status and known `error` codes for control flow.
+They must not match `message` text because that text can change.
+Clients must retain or ignore unknown top-level fields.
+An unknown `error` code remains an error with the received HTTP status.
 
 Some conflicts add typed top-level fields.
 Per-event validation adds an `errors` array with zero-based indexes, stable codes, and messages.
@@ -107,16 +118,30 @@ Append one atomic batch:
 
 `v` defaults to 1.
 `source` and `batch_id` belong to the batch.
+This route does not accept query parameters.
 
 Each submitted event has `stream`, `record_key`, `kind`, optional `occurred_at`, and `payload`.
 Groundhog rejects the complete batch when any event is invalid.
 
-A batch contains 1 through 10,000 events and no more than 32 MiB of encoded JSON.
+A batch contains 1 through 10,000 events and no more than 32 MiB of request-body JSON.
+Source, stream, and kind values use at most 128 UTF-8 bytes.
+Record keys use at most 1,024 UTF-8 bytes, and batch IDs use at most 256 UTF-8 bytes.
+Source and stream names match `[a-z0-9_][a-z0-9_.-]*`.
+Groundhog reserves the `system` source and the `groundhog/` batch ID prefix.
+
+Groundhog canonicalizes accepted payloads with RFC 8785 rules.
+It rejects non-finite numbers and precision-losing integer aliases.
+It also rejects payloads deeper than 128 containers.
+An `occurred_at` value must be a valid UTC calendar time with a final `Z`.
+It can omit fractional seconds or use one through nine fractional digits.
+Numeric offsets and leap seconds are invalid.
 
 ### Idempotency
 
 `(source, batch_id)` identifies one batch for the life of the data directory.
 Groundhog computes a canonical digest before it assigns server fields.
+The digest binds the source and ordered submitted event content.
+It excludes `batch_id`, `stream_precondition`, and server-assigned fields.
 
 A new batch returns:
 
@@ -130,11 +155,12 @@ A new batch returns:
 }
 ```
 
-An identical retry returns the original receipt with `status: "duplicate"` and writes nothing.
-Different content with the same key returns 409 and writes nothing.
+A retry with the same key and digest returns the original receipt with `status: "duplicate"`.
+The retry writes nothing after lifecycle state or the stream frontier changes.
+Different digested content with the same key returns `409 batch_id_conflict` and writes nothing.
 
 A successful receipt means the complete batch is durable.
-Retry identical content with the same key after a lost response.
+Retry the same submitted events with the same key after a lost response.
 
 ### Optional stream precondition
 
@@ -197,6 +223,7 @@ It is not the progress cursor for a filtered consumer.
 
 `next_after` is the last position that the request conclusively scanned.
 Persist it for the next finite poll.
+A finite page can contain fewer events than `limit` when it reaches the response-size bound.
 
 `snapshot_through_event_id` is the coherent frontier captured for the request.
 It is `null` only for an empty log.
@@ -220,6 +247,7 @@ The records have three forms:
 - An `end` record gives a terminal reason and the last delivered event ID.
 
 Terminal reasons are `shutdown`, `writer_poisoned`, `session_closed`, `buffer_exceeded`, and `replay_failed`.
+An `end` record can include a descriptive `detail` field.
 EOF without an `end` record is a transport failure.
 
 In follow mode, `limit` bounds each `events` record.
@@ -241,6 +269,7 @@ GET /v1/streams?source=stripe&limit=100
 
 The optional parameters are `source`, `after`, `through`, and `limit`.
 Results use source order followed by stream order.
+The `after` value is an exclusive `source/stream` cursor.
 
 ```json
 {
@@ -277,6 +306,8 @@ Permanently close one source to new batches:
 }
 ```
 
+This route does not accept query parameters.
+`v` defaults to 1.
 The source must have at least one committed event.
 Operators cannot retire the reserved `system` source.
 
@@ -296,10 +327,14 @@ A repeat returns the same fields with `status: "already_retired"`.
 A new batch for the retired source returns `409 source_retired`.
 
 Retirement does not rename, delete, seal, or compact existing history.
+It appends one event under source `system` and stream `groundhog.source_lifecycle`.
+The event uses kind `source_retired` and the retired source as its record key.
 
-A successor can declare one retired predecessor in its first batch. The first submitted event uses
-stream `groundhog.source_lineage`, kind `source_succeeded`, and the predecessor as its record key.
-Its payload contains the predecessor source and exact retired frontier.
+A successor can declare one retired predecessor in its first batch.
+The first submitted event uses stream `groundhog.source_lineage` and kind `source_succeeded`.
+Its record key equals the predecessor source, and it omits `occurred_at`.
+Its closed payload contains `v`, `predecessor_source`, and `predecessor_final_frontier`.
+The declared frontier must equal the predecessor's durable retired frontier.
 
 Groundhog returns `400 invalid_source_lineage` for a malformed or misplaced marker. It returns
 `409 source_lineage_conflict` when the predecessor retirement or successor state conflicts.
@@ -317,6 +352,7 @@ Groundhog returns `400 invalid_source_lineage` for a malformed or misplaced mark
 | 413 | A body or event count exceeded its limit. |
 | 415 | Unsupported content type, parameter, or content encoding. |
 | 429 | Bounded admission was unavailable. Inspect `Retry-After`. |
+| 500 | Groundhog encountered an unexpected internal failure. |
 | 503 | The writer cannot accept mutations until the service reopens it. |
 
 A 429 rejected before mutation queue admission writes nothing and is retryable.

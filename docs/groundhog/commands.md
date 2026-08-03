@@ -43,8 +43,9 @@ Relative paths in the file resolve against the file's directory.
 Initialization always writes `<DIR>/groundhog.toml`.
 
 Unknown configuration keys and invalid limits are usage errors.
-The binary supports security mode `open` and anchor mode `none`.
-It refuses configured guarantees that this release cannot provide.
+The binary serves only security mode `open`.
+`serve`, `seal`, and `verify --chain` support only anchor mode `none`.
+Plain `verify` checks storage without enforcing the configured anchor mode.
 
 Groundhog 0.2 rejects the removed `[query]` section with an exact migration instruction.
 See [Configuration](/groundhog/references/configuration).
@@ -53,7 +54,7 @@ See [Configuration](/groundhog/references/configuration).
 
 | command | deployment access | can run with live `serve` |
 |---|---|---:|
-| `init` | creates or validates owned paths | no |
+| `init` | creates or validates owned paths | an exact retry can |
 | `serve` | owns the log writer and socket | it is the service |
 | `seal` | owns the log writer | no |
 | `verify` | reads one coherent log snapshot | yes |
@@ -99,7 +100,10 @@ DIR/
 An exact retry validates the deployment and does not rewrite it.
 
 The command refuses a non-empty log without committed configuration.
-It also refuses unexpected entries, symbolic links, and special files in paths that it owns.
+It preserves unrelated entries in `DIR`.
+It refuses unrelated entries in `DIR/data`.
+It also refuses unexpected symbolic links and special files in the deployment paths that it manages.
+It permits known Groundhog 0.1 warehouse entries in `DIR/data` and leaves them unchanged.
 
 Groundhog does not create a warehouse file.
 It does not modify old warehouse files during an upgrade.
