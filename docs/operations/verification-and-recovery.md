@@ -4,7 +4,7 @@ description: Verify a deployment and respond to startup, storage, and integrity 
 ---
 
 <!-- generated-doc: GroundSystems/groundhog-src -->
-> Source: [`GroundSystems/groundhog-src/docs-export/operations/verification-and-recovery.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/operations/verification-and-recovery.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
+> Source: [`GroundSystems/groundhog-src/docs-export/operations/verification-and-recovery.md`](https://github.com/GroundSystems/groundhog-src/blob/19619b7e18520d45dad3738ca03a42c8ac1c2689/docs-export/operations/verification-and-recovery.md) at [`19619b7e1852`](https://github.com/GroundSystems/groundhog-src/commit/19619b7e18520d45dad3738ca03a42c8ac1c2689).
 > Edit the source file. Do not edit this generated copy.
 
 
