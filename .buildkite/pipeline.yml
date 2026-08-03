@@ -1,4 +1,17 @@
 steps:
+  - label: "Secrets / 1Password"
+    key: "secrets"
+    if: 'build.branch == "main" && build.pull_request.id == null'
+    agents:
+      queue: "linux-small"
+    secrets:
+      OP_SERVICE_ACCOUNT_TOKEN: "OP_SERVICE_ACCOUNT_TOKEN_GROUNDHOG_RELEASES"
+    timeout_in_minutes: 5
+    command: |
+      set -euo pipefail
+      .buildkite/scripts/with-1password groundhog-releases -- \
+        op item get groundhog-releases --vault "Buildkite Pipelines" >/dev/null
+
   - label: "Tests / docs"
     key: "docs"
     agents:
