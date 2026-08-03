@@ -15,9 +15,9 @@ Groundhog 0.2 does not include local SQL or a warehouse.
 
 - [Getting started](/guides/getting-started) covers installation, ingest, replay, follow, streams, and verification.
 - [Groundhog 0.2.0](/releases/0.2.0.md) lists breaking changes and the upgrade procedure.
-- [Commands](/commands) documents each command accepted by the binary.
-- [HTTP API](/references/http-api) documents the log API, limits, errors, and retry behavior.
-- [Deployment operations](/operations/deployment) explains supervision, maintenance, backup, and upgrade.
+- [Commands](/groundhog/commands) documents each command accepted by the binary.
+- [HTTP API](/groundhog/references/http-api) documents the log API, limits, errors, and retry behavior.
+- [Deployment operations](/groundhog/operations/deployment) explains supervision, maintenance, backup, and upgrade.
 - [Python SDK](/sdks/python) documents the synchronous Unix and HTTPS client.
 
 ## Manual organization

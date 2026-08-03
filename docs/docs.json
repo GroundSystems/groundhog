@@ -76,30 +76,30 @@
       {
         "group": "Use Groundhog",
         "pages": [
-          "commands",
-          "references/http-api"
+          "groundhog/commands",
+          "groundhog/references/http-api"
         ]
       },
       {
         "group": "Understand the system",
         "pages": [
-          "concepts/events",
-          "concepts/storage"
+          "groundhog/concepts/events",
+          "groundhog/concepts/storage"
         ]
       },
       {
         "group": "Operate a deployment",
         "pages": [
-          "references/configuration",
-          "operations/deployment",
-          "operations/verification-and-recovery"
+          "groundhog/references/configuration",
+          "groundhog/operations/deployment",
+          "groundhog/operations/verification-and-recovery"
         ]
       },
       {
         "group": "Reference",
         "pages": [
-          "references/cli",
-          "sdks/python"
+          "groundhog/references/cli",
+          "sdks/python/index"
         ]
       }
     ]
@@ -128,11 +128,11 @@
           },
           {
             "label": "Commands",
-            "href": "/commands"
+            "href": "/groundhog/commands"
           },
           {
             "label": "HTTP API",
-            "href": "/references/http-api"
+            "href": "/groundhog/references/http-api"
           }
         ]
       },

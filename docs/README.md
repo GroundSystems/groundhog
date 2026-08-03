@@ -2,20 +2,17 @@
 
 This directory contains the Groundhog 0.2 manual in Markdown.
 
-- **commands** document executable entry points
-- **references** document configuration and HTTP surfaces
-- **concepts** explain event data and durable storage
-- **operations** cover deployment, verification, upgrade, and recovery
+- **groundhog** contains documentation from `GroundSystems/groundhog-src`
 - **guides** provide complete tasks
-- **SDKs** document supported client libraries
+- **sdks** contains documentation from SDK repositories
 
 ## Start here
 
 - [Getting started](guides/getting-started.md) covers local ingest, replay, follow, streams, and verification.
 - [Groundhog 0.2.0](releases/0.2.0.md) lists breaking changes and the upgrade procedure.
-- [groundhog(1)](references/cli.md) lists CLI options, commands, streams, and exit status.
-- [Configuration](references/configuration.md) lists every accepted `groundhog.toml` field.
-- [Deployment operations](operations/deployment.md) explains supervision, maintenance, backup, and upgrade.
+- [groundhog(1)](groundhog/references/cli.md) lists CLI options, commands, streams, and exit status.
+- [Configuration](groundhog/references/configuration.md) lists every accepted `groundhog.toml` field.
+- [Deployment operations](groundhog/operations/deployment.md) explains supervision, maintenance, backup, and upgrade.
 
 ## Product rule
 
@@ -26,37 +23,34 @@ Groundhog 0.2 does not include a warehouse, local SQL, query routes, catalog rou
 
 ## Commands
 
-The [groundhog commands](commands.md) page documents all commands.
+The [groundhog commands](groundhog/commands.md) page documents all commands.
 
 | command | purpose |
 |---|---|
-| [`init`](commands.md#init) | Create or validate a deployment. |
-| [`serve`](commands.md#serve) | Run the Unix-socket HTTP service. |
-| [`seal`](commands.md#seal) | Move the append tail into immutable Parquet segments. |
-| [`verify`](commands.md#verify) | Verify storage and optional chain integrity. |
+| [`init`](groundhog/commands.md#init) | Create or validate a deployment. |
+| [`serve`](groundhog/commands.md#serve) | Run the Unix-socket HTTP service. |
+| [`seal`](groundhog/commands.md#seal) | Move the append tail into immutable Parquet segments. |
+| [`verify`](groundhog/commands.md#verify) | Verify storage and optional chain integrity. |
 
 ## Documentation ownership
 
 This repository owns `docs.json`, navigation, branding, redirects, guides, and release notes.
 
-Buildkite imports these generated paths:
+Each source repository publishes one isolated directory:
 
 | path | owner |
 |---|---|
-| `commands.md` | `GroundSystems/groundhog-src` |
-| `concepts/` | `GroundSystems/groundhog-src` |
-| `operations/` | `GroundSystems/groundhog-src` |
-| `references/` | `GroundSystems/groundhog-src` |
-| `sdks/` | `GroundSystems/groundhog-sdk-python` |
+| `groundhog/` | `GroundSystems/groundhog-src` |
+| `sdks/python/` | `GroundSystems/groundhog-sdk-python` |
 
-The root [`docs-sources.lock.json`](../docs-sources.lock.json) file records source commits and
-published hashes. Edit generated pages in their owning repositories.
+Edit published pages in their source repositories.
 
 ## Published interface
 
-[`openapi.yaml`](../openapi.yaml) is the authoritative HTTP contract. The
-[verification directory](../verify/README.md) contains the public conformance tools, black-box
-checks, and compatibility fixtures.
+[`openapi.yaml`](https://github.com/GroundSystems/groundhog/blob/main/openapi.yaml) is the
+authoritative HTTP contract. The
+[verification directory](https://github.com/GroundSystems/groundhog/tree/main/verify) contains the
+public conformance tools, black-box checks, and compatibility fixtures.
 
 `GroundSystems/groundhog-src` publishes the public contract and verification files separately.
 
@@ -64,12 +58,12 @@ checks, and compatibility fixtures.
 
 | page | scope |
 |---|---|
-| [Events](concepts/events.md) | Event fields, identity, order, batches, preconditions, and source lifecycle. |
-| [Storage](concepts/storage.md) | Durability, Parquet segments, writer ownership, recovery, and backup. |
-| [HTTP API](references/http-api.md) | Ingest, replay, follow, streams, lifecycle, limits, and errors. |
-| [Deployment](operations/deployment.md) | Supervision, consumers, maintenance, upgrade, and backup. |
-| [Verification and recovery](operations/verification-and-recovery.md) | Verification depth and failure procedures. |
-| [Python SDK](sdks/python.md) | Unix, HTTPS, ingest, replay, streams, and typed errors. |
+| [Events](groundhog/concepts/events.md) | Event fields, identity, order, batches, preconditions, and source lifecycle. |
+| [Storage](groundhog/concepts/storage.md) | Durability, Parquet segments, writer ownership, recovery, and backup. |
+| [HTTP API](groundhog/references/http-api.md) | Ingest, replay, follow, streams, lifecycle, limits, and errors. |
+| [Deployment](groundhog/operations/deployment.md) | Supervision, consumers, maintenance, upgrade, and backup. |
+| [Verification and recovery](groundhog/operations/verification-and-recovery.md) | Verification depth and failure procedures. |
+| [Python SDK](sdks/python/index.md) | Unix, HTTPS, ingest, replay, streams, and typed errors. |
 
 ## Released surface
 

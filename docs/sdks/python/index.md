@@ -3,11 +3,6 @@ title: Python SDK
 description: Install and use groundhog-sdk 0.2 for ingest, replay, and stream enumeration.
 ---
 
-<!-- generated-doc: GroundSystems/groundhog-sdk-python -->
-> Source: [`GroundSystems/groundhog-sdk-python/docs-export/python.md`](https://github.com/GroundSystems/groundhog-sdk-python/blob/89f24881b7c2369fc752c1d83faa6a5507f0e891/docs-export/python.md) at [`89f24881b7c2`](https://github.com/GroundSystems/groundhog-sdk-python/commit/89f24881b7c2369fc752c1d83faa6a5507f0e891).
-> Edit the source file. Do not edit this generated copy.
-
-
 The `groundhog-sdk` package is the synchronous Python client for the Groundhog version 1 HTTP API.
 Version 0.2 supports Unix sockets and HTTPS.
 

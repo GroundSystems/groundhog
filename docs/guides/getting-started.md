@@ -59,7 +59,7 @@ The same command validates the deployment without rewriting it.
 Groundhog refuses conflicting files in paths that it owns.
 It preserves unrelated sibling files in `demo/`.
 
-See [`init`](/commands#init) for detailed retry and conflict behavior.
+See [`init`](/groundhog/commands#init) for detailed retry and conflict behavior.
 
 ## 3. Review the configuration
 
@@ -101,7 +101,7 @@ Protect the configuration file because it stores the token as plaintext.
 Groundhog 0.2 does not accept a `[query]` section.
 Remove that section from a Groundhog 0.1 configuration before the upgrade.
 
-See the [configuration reference](/references/configuration) for all fields.
+See the [configuration reference](/groundhog/references/configuration) for all fields.
 
 ## 4. Start the service
 
@@ -292,11 +292,11 @@ Sealing changes physical storage and does not change logical event history.
 Groundhog 0.2 ignores old `warehouse.duckdb` files and never deletes them.
 Remove them manually only after the 0.2 deployment opens, verifies, and passes application checks.
 
-See [Deployment operations](/operations/deployment) for the complete upgrade procedure.
+See [Deployment operations](/groundhog/operations/deployment) for the complete upgrade procedure.
 
 ## Next steps
 
-- Read the [HTTP API](/references/http-api) for replay, follow, streams, lifecycle, limits, and errors.
+- Read the [HTTP API](/groundhog/references/http-api) for replay, follow, streams, lifecycle, limits, and errors.
 - Use the [Python SDK](/sdks/python) when an application does not need direct HTTP calls.
-- Read [Storage](/concepts/storage) before you design backup and recovery procedures.
-- Use [Verification and recovery](/operations/verification-and-recovery) for incident procedures.
+- Read [Storage](/groundhog/concepts/storage) before you design backup and recovery procedures.
+- Use [Verification and recovery](/groundhog/operations/verification-and-recovery) for incident procedures.

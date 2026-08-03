@@ -3,11 +3,6 @@ title: groundhog(1)
 description: Groundhog 0.2 CLI synopsis, options, commands, streams, and exit status.
 ---
 
-<!-- generated-doc: GroundSystems/groundhog-src -->
-> Source: [`GroundSystems/groundhog-src/docs-export/references/cli.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/references/cli.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
-> Edit the source file. Do not edit this generated copy.
-
-
 ## Name
 
 `groundhog`: maintain and serve a durable append-only event log.
@@ -43,10 +38,10 @@ Every command except `init` loads this file.
 
 | command | purpose |
 |---|---|
-| [`init`](/commands#init) | Create or validate a deployment. |
-| [`serve`](/commands#serve) | Serve the log API over a Unix socket. |
-| [`seal`](/commands#seal) | Move the append tail into immutable Parquet segments. |
-| [`verify`](/commands#verify) | Check storage and optional chain integrity. |
+| [`init`](/groundhog/commands#init) | Create or validate a deployment. |
+| [`serve`](/groundhog/commands#serve) | Serve the log API over a Unix socket. |
+| [`seal`](/groundhog/commands#seal) | Move the append tail into immutable Parquet segments. |
+| [`verify`](/groundhog/commands#verify) | Check storage and optional chain integrity. |
 
 Groundhog 0.2 removes `project` and `rebuild`.
 
@@ -101,7 +96,7 @@ The removed `[query]` section produces this error:
 The [query] section is no longer supported. Remove it from groundhog.toml.
 ```
 
-See [Configuration](/references/configuration).
+See [Configuration](/groundhog/references/configuration).
 
 ## HTTP service
 
@@ -135,7 +130,7 @@ groundhog verify --chain --config ./instance/groundhog.toml
 ## See also
 
 [Getting started](/guides/getting-started),
-[configuration](/references/configuration),
-[events](/concepts/events),
-[storage](/concepts/storage),
-[deployment operations](/operations/deployment)
+[configuration](/groundhog/references/configuration),
+[events](/groundhog/concepts/events),
+[storage](/groundhog/concepts/storage),
+[deployment operations](/groundhog/operations/deployment)

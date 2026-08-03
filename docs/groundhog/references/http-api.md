@@ -3,11 +3,6 @@ title: Groundhog HTTP API
 description: Groundhog 0.2 transport, authentication, log routes, errors, and retry behavior.
 ---
 
-<!-- generated-doc: GroundSystems/groundhog-src -->
-> Source: [`GroundSystems/groundhog-src/docs-export/references/http-api.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/references/http-api.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
-> Edit the source file. Do not edit this generated copy.
-
-
 ## Name
 
 `groundhog-http`: the version 1 log API over a Unix domain socket.
@@ -339,7 +334,7 @@ Sending these routes or media types does not activate partial behavior.
 
 ## See also
 
-[`serve`](/commands#serve),
-[configuration](/references/configuration),
-[events](/concepts/events),
+[`serve`](/groundhog/commands#serve),
+[configuration](/groundhog/references/configuration),
+[events](/groundhog/concepts/events),
 [getting started](/guides/getting-started)

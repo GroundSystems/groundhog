@@ -3,11 +3,6 @@ title: groundhog commands
 description: Complete command reference for the Groundhog 0.2 binary.
 ---
 
-<!-- generated-doc: GroundSystems/groundhog-src -->
-> Source: [`GroundSystems/groundhog-src/docs-export/commands.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/commands.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
-> Edit the source file. Do not edit this generated copy.
-
-
 Groundhog 0.2 uses this deployment lifecycle:
 
 ```text
@@ -52,7 +47,7 @@ The binary supports security mode `open` and anchor mode `none`.
 It refuses configured guarantees that this release cannot provide.
 
 Groundhog 0.2 rejects the removed `[query]` section with an exact migration instruction.
-See [Configuration](/references/configuration).
+See [Configuration](/groundhog/references/configuration).
 
 ### Ownership and concurrency
 
@@ -152,7 +147,7 @@ If an ingest response is lost, retry identical content with the same batch ID.
 groundhog serve --config ./instance/groundhog.toml
 ```
 
-See [HTTP API](/references/http-api) and [Deployment operations](/operations/deployment).
+See [HTTP API](/groundhog/references/http-api) and [Deployment operations](/groundhog/operations/deployment).
 
 ## `seal`
 
@@ -177,7 +172,7 @@ An empty tail with no pending work returns exit code 1.
 groundhog seal --config ./instance/groundhog.toml
 ```
 
-See [Storage](/concepts/storage).
+See [Storage](/groundhog/concepts/storage).
 
 ## `verify`
 
@@ -218,7 +213,7 @@ Operational, usage, and refusal exits do not produce a JSON report.
 groundhog verify --chain --config ./instance/groundhog.toml
 ```
 
-See [Verification and recovery](/operations/verification-and-recovery).
+See [Verification and recovery](/groundhog/operations/verification-and-recovery).
 
 ## Removed and unavailable commands
 
@@ -231,6 +226,6 @@ Use the HTTP API for ingest, replay, follow, stream enumeration, and source reti
 ## See also
 
 [Getting started](/guides/getting-started),
-[CLI overview](/references/cli),
-[Configuration](/references/configuration),
-[HTTP API](/references/http-api)
+[CLI overview](/groundhog/references/cli),
+[Configuration](/groundhog/references/configuration),
+[HTTP API](/groundhog/references/http-api)

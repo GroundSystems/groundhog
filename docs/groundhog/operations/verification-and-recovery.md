@@ -3,11 +3,6 @@ title: Verification and recovery
 description: Verify a deployment and respond to startup, storage, and integrity failures.
 ---
 
-<!-- generated-doc: GroundSystems/groundhog-src -->
-> Source: [`GroundSystems/groundhog-src/docs-export/operations/verification-and-recovery.md`](https://github.com/GroundSystems/groundhog-src/blob/29b0fa4fc92fd4d4902533e4a714b1be97686eb9/docs-export/operations/verification-and-recovery.md) at [`29b0fa4fc92f`](https://github.com/GroundSystems/groundhog-src/commit/29b0fa4fc92fd4d4902533e4a714b1be97686eb9).
-> Edit the source file. Do not edit this generated copy.
-
-
 ## Name
 
 `groundhog-recovery`: verification depth, crash recovery, and operator response.
@@ -156,6 +151,6 @@ Do not connect the restore to production clients or share a writer path.
 
 ## See also
 
-[`verify`](/commands#verify),
-[storage](/concepts/storage),
-[deployment operations](/operations/deployment)
+[`verify`](/groundhog/commands#verify),
+[storage](/groundhog/concepts/storage),
+[deployment operations](/groundhog/operations/deployment)
