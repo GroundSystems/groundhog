@@ -25,6 +25,7 @@ Every open checks these stored facts:
 - one coherent committed history frontier
 - strictly ordered event ranges
 - consistent durable `(source, batch_id)` commitments.
+- consistent source-retirement commitments.
 
 A writer can exclude or finish a recognized interrupted final write.
 Groundhog does not discard conflicting complete records or representations.
@@ -49,9 +50,10 @@ The report also lists recognized orphans and repairable remnants without changin
 1. `content_hash` from canonical payload JSON.
 2. `event_hash` from the canonical fixed envelope.
 3. The ordered logical chain from the fixed genesis head.
+4. Source-retirement and successor-lineage state from ordered events.
 
-It compares chain heads at required boundaries and the captured frontier.
-This check detects available-history alteration, insertion, removal, or reordering.
+It compares chain heads at segment boundaries and the captured frontier.
+It detects changes that conflict with the available commitments and recorded chain heads.
 
 Local chain consistency does not prove that an owner did not replace the complete directory coherently.
 Groundhog 0.2 does not support external anchors.

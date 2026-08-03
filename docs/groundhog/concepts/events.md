@@ -56,7 +56,7 @@ Replay and follow return committed events with these fields:
 | `record_key` | The source-scoped record identity. |
 | `kind` | The submitted event kind. |
 | `occurred_at` | Optional source time. |
-| `observed_at` | The time when Groundhog received the event. |
+| `observed_at` | The batch admission time. All events in one batch use this time. |
 | `payload` | The submitted JSON value. |
 | `content_hash` | A commitment to the submitted payload. |
 | `batch_id` | The idempotency ID for the submitted batch. |
@@ -88,7 +88,8 @@ Applications build current state, indexes, reports, and other derived views from
 The pair `(source, batch_id)` identifies one batch for the life of the data directory.
 
 - A new key commits the batch and returns `status: "committed"`.
-- An identical retry returns `status: "duplicate"` and the original receipt.
+- A retry with the same committed event content returns `status: "duplicate"` and the original
+  receipt.
 - Different content with the same key returns HTTP 409 and writes nothing.
 
 Use a stable delivery, webhook, export, or synchronization ID.
@@ -98,16 +99,21 @@ Retry identical content with the same ID after a lost response.
 
 A batch can require an expected frontier for one stream.
 The `stream_precondition` field names the stream and its expected latest event ID.
+Every event in the batch must use the named stream.
 
 Set `expected_frontier` to `null` when the stream must have no committed events.
 A mismatch returns HTTP 409 and commits nothing.
 
-An identical retry of an accepted batch returns its original receipt before Groundhog checks the old precondition again.
+A matching retry returns its original receipt before Groundhog checks the precondition again.
+The precondition is not part of the batch content identity.
 
 ## Source lifecycle
 
 Groundhog can permanently retire a source through `POST /v1/sources/retire`.
 A retired source keeps its complete history but refuses new batches.
+Groundhog records the retirement as one ordered event from the reserved `system` source.
+It uses stream `groundhog.source_lifecycle` and kind `source_retired`.
+Its payload records the retired source and that source's final event ID.
 
 A new source can declare one retired predecessor in its first batch. The first event must use
 stream `groundhog.source_lineage`, kind `source_succeeded`, and the predecessor as its record key.
@@ -123,7 +129,9 @@ marker after the successor already has committed events.
 - `record_key` is not empty and uses at most 1,024 bytes.
 - `batch_id` is not empty and uses at most 256 bytes.
 - Groundhog reserves source `system` and batch IDs that start with `groundhog/`.
-- `occurred_at` uses UTC with a `Z` suffix when present.
+- `occurred_at` uses `YYYY-MM-DDTHH:MM:SSZ` when it has no fractional seconds.
+- Fractional seconds use a decimal point followed by one through nine digits before `Z`.
+- Groundhog rejects numeric UTC offsets, leap seconds, and invalid calendar dates.
 - A JSON batch contains 1 through 10,000 events and uses at most 32 MiB.
 
 ## JSON and hash rules
@@ -142,6 +150,7 @@ that field.
 
 Groundhog computes `batch_digest` from the version, source, ordered event identity fields, and
 content hashes. The digest excludes `batch_id` and `stream_precondition`.
+The pair `(source, batch_id)` supplies the separate idempotency key.
 
 ## See also
 
