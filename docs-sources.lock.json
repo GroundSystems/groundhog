@@ -2,11 +2,11 @@
   "schema_version": 1,
   "sources": {
     "GroundSystems/groundhog-sdk-python": {
-      "commit": "89f24881b7c2369fc752c1d83faa6a5507f0e891",
+      "commit": "5a4c0e8f6465a44010be2e58f34f3b70781b39e2",
       "files": {
         "docs/sdks/python.md": {
           "source": "docs-export/python.md",
-          "sha256": "sha256:14f4b2778094d076f52c9e3a5e50888963162163a3a6e841ea32b33032d88199"
+          "sha256": "sha256:de894e8f4919f43a219711e94a26d2a7f38be9b3e6a1255fb136ee6702a4f3b2"
         }
       }
     },
