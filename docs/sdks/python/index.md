@@ -85,6 +85,7 @@ ground = Ground(transport=transport, token="service-token")
 
 `Ground` also reads `GROUND_URL` and `GROUND_TOKEN`.
 Explicit arguments take precedence over environment variables.
+Set these variables before you construct `Ground()`, then omit the matching arguments.
 
 `max_retries` sets the number of attempts after the first request.
 The default is 3.
