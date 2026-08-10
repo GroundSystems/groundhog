@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_revision": "a6b2aa89a437b3492fd9cdc9e8c1608f06725e9f",
+  "source_revision": "d093f2aff10ba5b1192bc4b5e58fd3963ad5ca55",
   "binary_version": "0.2.0",
   "openapi_version": "0.2.0",
   "files": {
@@ -8,7 +8,7 @@
     ".github/ISSUE_TEMPLATE/feature-request.yml": "sha256:d9dd6eb5a46390344d3f7846db56d96b8936f6d6b7e294cc595229e98e4881b9",
     ".github/ISSUE_TEMPLATE/support-request.yml": "sha256:e494ac6e3048182a2e33ad3f2ed86854550b733bc49040483eeef5c725cf0ff5",
     "LICENSE.md": "sha256:5450a33b92eeaea6d58fabcd1991585aa545be15e1bf5f474dd8891e91d211b1",
-    "README.md": "sha256:9bd3cce5ebceefeff5a442160841d42ce59152695b691d3807bdd7e7f1723d91",
+    "README.md": "sha256:c52d70536987cfa5d6affe3fed20e47b6a3e56383209417ff9a26023e39892ca",
     "openapi.yaml": "sha256:2e81309aea43d922306b0f0257eeff4966db8b7cf1719fc31318ceca6a6e7186",
     "verify/.gitignore": "sha256:4b1c69711b70dd78d628881c4577f08d642e7013c7c56fa5599dd4fe3d1c8d60",
     "verify/README.md": "sha256:64046f555ba075fa50af5f4b3d0563af34b78abd097eb5ed9eb13e02cde67155",

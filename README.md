@@ -28,8 +28,13 @@ the `groundhog` binary, build provenance, the Groundhog license, and third-party
 
 ## Documentation
 
-The Groundhog manual is in [`docs/`](docs/). Its `docs.json` configuration uses `/docs` as the
-documentation path for Mintlify.
+The [Groundhog manual](https://github.com/GroundSystems/groundhog/tree/main/docs) is published from
+`GroundSystems/groundhog`. That repository owns its guides, navigation, branding, and Mintlify
+deployment.
+
+The private source repository owns the reference pages under
+[`docs/groundhog/`](https://github.com/GroundSystems/groundhog-src/tree/main/docs/groundhog).
+Buildkite copies that path to the same path in the public repository.
 
 ## Published interface and verification
 
