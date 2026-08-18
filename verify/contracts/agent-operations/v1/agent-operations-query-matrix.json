@@ -1,0 +1,253 @@
+{
+  "contract_version": 1,
+  "name": "agent_operations_query_matrix",
+  "version": 1,
+  "index_policy": "complete_p0_allowlist",
+  "implicit_index": "primary_key",
+  "queries": [
+    {
+      "id": "Q01",
+      "surface": "Event explorer",
+      "relation": "groundhog.events",
+      "filters": [
+        {"field":"source","operators":["eq"],"required":false},
+        {"field":"stream","operators":["eq"],"required":false},
+        {"field":"record_key","operators":["eq"],"required":false},
+        {"field":"kind","operators":["eq"],"required":false},
+        {"field":"observed_at","operators":["gte","gt","lte","lt"],"required":false}
+      ],
+      "order_by": [{"field":"event_id","direction":"desc"}],
+      "access_paths": ["by_source", "by_stream", "by_record_key", "by_kind", "by_observed_at", "primary_key"]
+    },
+    {
+      "id": "Q02",
+      "surface": "Raw causal events",
+      "relation": "groundhog.events",
+      "filters": [{"field":"event_id","operators":["in"],"required":true,"maximum_values":10000}],
+      "order_by": [{"field":"event_id","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q03",
+      "surface": "Runs page",
+      "relation": "agents.runs_current",
+      "filters": [
+        {"field":"demo_session_id","operators":["eq"],"required_alternative":"ownership"},
+        {"field":"workspace_id","operators":["eq"],"required_alternative":"ownership"},
+        {"field":"status","operators":["eq","in"],"required":false}
+      ],
+      "order_by": [{"field":"started_at","direction":"desc"}],
+      "access_paths": ["by_demo_session", "by_workspace", "by_status", "by_started"]
+    },
+    {
+      "id": "Q04",
+      "surface": "Run detail",
+      "relation": "agents.runs_current",
+      "filters": [{"field":"run_id","operators":["eq"],"required":true}],
+      "order_by": [{"field":"run_id","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q05",
+      "surface": "Session playback",
+      "relation": "agents.session_timeline",
+      "filters": [{"field":"session_id","operators":["eq"],"required":true}],
+      "order_by": [{"field":"sequence","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q06",
+      "surface": "Tool-call causal trace",
+      "relation": "agents.session_timeline",
+      "filters": [{"field":"tool_call_id","operators":["eq"],"required":true}],
+      "order_by": [{"field":"sequence","direction":"asc"}],
+      "access_paths": ["by_tool_call_sequence"]
+    },
+    {
+      "id": "Q07",
+      "surface": "Call causal trace",
+      "relation": "agents.session_timeline",
+      "filters": [{"field":"call_id","operators":["eq"],"required":true}],
+      "order_by": [{"field":"sequence","direction":"asc"}],
+      "access_paths": ["by_call_sequence"]
+    },
+    {
+      "id": "Q08",
+      "surface": "Tool-call detail",
+      "relation": "agents.tool_calls_current",
+      "filters": [{"field":"tool_call_id","operators":["eq"],"required":true}],
+      "order_by": [{"field":"tool_call_id","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q09",
+      "surface": "Tool calls for one run",
+      "relation": "agents.tool_calls_current",
+      "filters": [
+        {"field":"run_id","operators":["eq"],"required":true},
+        {"field":"initial_resolution","operators":["eq"],"required":false},
+        {"field":"final_resolution","operators":["eq"],"required":false}
+      ],
+      "order_by": [{"field":"started_at","direction":"asc"}],
+      "access_paths": ["by_run", "by_initial_resolution", "by_final_resolution", "by_started"]
+    },
+    {
+      "id": "Q10",
+      "surface": "Calls page",
+      "relation": "calls.calls_current",
+      "filters": [
+        {"field":"demo_session_id","operators":["eq"],"required_alternative":"ownership"},
+        {"field":"workspace_id","operators":["eq"],"required_alternative":"ownership"},
+        {"field":"provider","operators":["eq","in"],"required":false},
+        {"field":"operation","operators":["eq","in"],"required":false},
+        {"field":"mode","operators":["eq","in"],"required":false},
+        {"field":"policy_result","operators":["eq","in"],"required":false},
+        {"field":"state","operators":["eq","in"],"required":false},
+        {"field":"resolution","operators":["eq","in"],"required":false},
+        {"field":"run_id","operators":["eq"],"required":false}
+      ],
+      "order_by": [{"field":"requested_at","direction":"desc"}],
+      "access_paths": ["by_demo_session", "by_workspace", "by_provider", "by_operation", "by_mode", "by_policy_result", "by_state", "by_resolution", "by_run", "by_requested"]
+    },
+    {
+      "id": "Q11",
+      "surface": "Call detail",
+      "relation": "calls.calls_current",
+      "filters": [{"field":"call_id","operators":["eq"],"required":true}],
+      "order_by": [{"field":"call_id","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q12",
+      "surface": "Pending approvals",
+      "relation": "actions.actions_pending",
+      "filters": [
+        {"field":"demo_session_id","operators":["eq"],"required":true},
+        {"field":"state","operators":["eq"],"required":true,"fixed_value":"pending"}
+      ],
+      "order_by": [{"field":"requested_at","direction":"asc"}],
+      "access_paths": ["by_demo_session", "by_state", "by_requested"]
+    },
+    {
+      "id": "Q13",
+      "surface": "Provider resource detail",
+      "relations": ["providers.state_observed", "providers.state_optimistic", "providers.state_effective"],
+      "filters": [
+        {"field":"demo_session_id","operators":["eq"],"required":true},
+        {"field":"resource_type","operators":["eq"],"required":true},
+        {"field":"resource_id","operators":["eq"],"required":true}
+      ],
+      "order_by": [{"field":"demo_session_id","direction":"asc"},{"field":"resource_type","direction":"asc"},{"field":"resource_id","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q14",
+      "surface": "Provider resource list",
+      "relation": "providers.state_effective",
+      "filters": [
+        {"field":"demo_session_id","operators":["eq"],"required":true},
+        {"field":"resource_type","operators":["eq"],"required":false}
+      ],
+      "order_by": [{"field":"updated_at","direction":"desc"}],
+      "access_paths": ["by_demo_session", "by_resource_type", "by_updated"]
+    },
+    {
+      "id": "Q15",
+      "surface": "Current memory",
+      "relation": "memory.memory_current",
+      "filters": [
+        {"field":"scope_id","operators":["eq"],"required":true},
+        {"field":"subject","operators":["eq"],"required":false},
+        {"field":"key","operators":["eq"],"required":false}
+      ],
+      "order_by": [{"field":"updated_at","direction":"desc"}],
+      "access_paths": ["by_scope", "by_subject", "by_key", "by_updated"]
+    },
+    {
+      "id": "Q16",
+      "surface": "Memory from failed or retried calls",
+      "relation": "memory.memory_current",
+      "filters": [
+        {"field":"scope_id","operators":["eq"],"required":true},
+        {"field":"evidence_classes","operators":["contains_any"],"required":true,"fixed_values":["failed_call","retried_call"]}
+      ],
+      "order_by": [{"field":"updated_at","direction":"desc"}],
+      "access_paths": ["by_scope", "by_evidence_class", "by_updated"]
+    },
+    {
+      "id": "Q17",
+      "surface": "Memory history",
+      "relation": "memory.memory_history",
+      "filters": [
+        {"field":"scope_id","operators":["eq"],"required":true},
+        {"field":"subject","operators":["eq"],"required":true},
+        {"field":"key","operators":["eq"],"required":true}
+      ],
+      "order_by": [{"field":"sequence","direction":"asc"}],
+      "access_paths": ["by_memory_sequence"]
+    },
+    {
+      "id": "Q18",
+      "surface": "Memory evidence",
+      "relation": "memory.memory_evidence",
+      "filters": [{"field":"memory_event_id","operators":["eq"],"required":true}],
+      "order_by": [{"field":"evidence_event_id","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q19",
+      "surface": "API health",
+      "relation": "api.health_minute",
+      "filters": [
+        {"field":"provider","operators":["eq"],"required":false},
+        {"field":"operation","operators":["eq"],"required":false},
+        {"field":"minute","operators":["gte","gt","lte","lt"],"required":true}
+      ],
+      "order_by": [{"field":"minute","direction":"asc"}],
+      "access_paths": ["by_provider", "by_operation", "by_minute"]
+    },
+    {
+      "id": "Q20",
+      "surface": "Evaluation detail",
+      "relation": "evaluations.current",
+      "filters": [
+        {"field":"run_id","operators":["eq"],"required":true},
+        {"field":"evaluator","operators":["eq"],"required":false}
+      ],
+      "order_by": [{"field":"evaluator","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q21",
+      "surface": "Workspace usage",
+      "relation": "usage.workspace_daily",
+      "filters": [
+        {"field":"workspace_id","operators":["eq"],"required":true},
+        {"field":"day","operators":["gte","gt","lte","lt"],"required":true}
+      ],
+      "order_by": [{"field":"day","direction":"asc"}],
+      "access_paths": ["primary_key"]
+    },
+    {
+      "id": "Q22",
+      "surface": "Operation usage",
+      "relation": "usage.usage_by_operation",
+      "filters": [
+        {"field":"workspace_id","operators":["eq"],"required":true},
+        {"field":"day","operators":["gte","gt","lte","lt"],"required":true},
+        {"field":"provider","operators":["eq"],"required":false},
+        {"field":"operation","operators":["eq"],"required":false}
+      ],
+      "order_by": [{"field":"day","direction":"asc"}],
+      "access_paths": ["primary_key", "by_provider", "by_operation"]
+    },
+    {
+      "id": "Q23",
+      "surface": "Projection status",
+      "relation": "projections.state",
+      "filters": [{"field":"status","operators":["eq"],"required":false}],
+      "order_by": [{"field":"projection_name","direction":"asc"}],
+      "access_paths": ["by_status", "primary_key"]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "consistency": {
+    "mode": "at_least",
+    "receipt": {
+      "frontier_event_id": "019c0000-0000-7000-8000-000000000004",
+      "frontier_event_count": 4,
+      "chain_head": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "wait_timeout_ms": 5000
+  },
+  "queries": [
+    {
+      "name": "recent_runs",
+      "query": {
+        "relation": "agents.runs_current",
+        "select": [
+          "run_id",
+          "status"
+        ],
+        "order_by": [
+          {
+            "field": "started_at",
+            "direction": "desc"
+          }
+        ],
+        "limit": 10
+      }
+    },
+    {
+      "name": "run_totals",
+      "query": {
+        "relation": "agents.runs_current",
+        "aggregate": {
+          "group_by": [
+            "status"
+          ],
+          "measures": [
+            {
+              "name": "runs",
+              "op": "count"
+            }
+          ]
+        },
+        "limit": 10
+      }
+    }
+  ]
+}

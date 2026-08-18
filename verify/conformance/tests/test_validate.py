@@ -3,11 +3,17 @@ from __future__ import annotations
 import copy
 import tempfile
 import unittest
+from unittest import mock
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verify.conformance.validate import ContractError, load_document, validate_document
+from verify.conformance.validate import (
+    ContractError,
+    _validate_form_example,
+    load_document,
+    validate_document,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 DOCUMENT = load_document(ROOT / "openapi.yaml")
@@ -76,9 +82,45 @@ class ValidatorTests(unittest.TestCase):
             "ReplayQuery",
         )
 
+    def test_relation_path_parameter_is_checked(self) -> None:
+        self.assert_rejected(
+            lambda document: document["components"]["parameters"]["RelationPath"].update(
+                required=False
+            ),
+            "required path parameter",
+        )
+
+    def test_projection_status_path_and_parameter_are_checked(self) -> None:
+        self.assert_rejected(
+            lambda document: document["paths"].pop(
+                "/v1/projections/{projection}/status"
+            ),
+            "seven public route paths",
+        )
+        self.assert_rejected(
+            lambda document: document["components"]["parameters"][
+                "ProjectionPath"
+            ].update(required=False),
+            "ProjectionPath must be a required path parameter",
+        )
+
+    def test_projection_status_operation_is_checked(self) -> None:
+        self.assert_rejected(
+            lambda document: document["paths"][
+                "/v1/projections/{projection}/status"
+            ]["get"].update(operationId="unexpectedProjectionStatus"),
+            "getProjectionStatus",
+        )
+
     def test_requests_are_checked(self) -> None:
         self.assert_rejected(
             lambda document: document["paths"]["/v1/events"]["post"].pop("requestBody"),
+            "require a request body",
+        )
+
+    def test_query_request_schema_is_checked(self) -> None:
+        self.assert_rejected(
+            lambda document: document["paths"]["/v1/query"]["post"].pop("requestBody"),
             "require a request body",
         )
 
@@ -150,6 +192,27 @@ class ValidatorTests(unittest.TestCase):
             "does not match dataValue",
         )
 
+    def test_nonempty_form_serialization_remains_strict(self) -> None:
+        self.assert_rejected(
+            lambda document: document["components"]["parameters"]["ReplayQuery"][
+                "content"
+            ]["application/x-www-form-urlencoded"]["examples"]["finitePage"].update(
+                serializedValue="missing-equals"
+            ),
+            "serializedValue is invalid",
+        )
+
+    @mock.patch("verify.conformance.validate.urllib.parse.parse_qsl")
+    def test_empty_form_serialization_has_no_query_fields(
+        self, parse_qsl: mock.Mock
+    ) -> None:
+        errors: list[str] = []
+        _validate_form_example(
+            {"dataValue": {}, "serializedValue": ""}, "NoQuery empty", errors
+        )
+        self.assertEqual(errors, [])
+        parse_qsl.assert_not_called()
+
     def test_duplicate_ndjson_example_members_are_rejected(self) -> None:
         self.assert_rejected(
             lambda document: document["components"]["responses"]["ReplaySuccess"][
@@ -175,6 +238,12 @@ class ValidatorTests(unittest.TestCase):
                 "x-invariants"
             ),
             "successor-lineage invariants",
+        )
+        self.assert_rejected(
+            lambda document: document["components"]["schemas"]["QueryRequest"].pop(
+                "x-invariants"
+            ),
+            "QueryRequest must define its cross-field invariants",
         )
 
 

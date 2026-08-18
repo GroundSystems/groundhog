@@ -1,0 +1,13 @@
+{
+  "snapshot_id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "frontier_event_id": null,
+  "frontier_event_count": 0,
+  "chain_head": "de84c29d7e74ec3e0ac6db8d29ad38be698cacc529bd530f004144e36f06e42b",
+  "projection_versions": {
+    "agent_operations": 1
+  },
+  "schema_versions": {
+    "agents.runs_current": 1
+  },
+  "retained_until": "2026-08-12T12:00:00Z"
+}

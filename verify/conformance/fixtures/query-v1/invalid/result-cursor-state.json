@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "query_id": "qry_invalid_cursor_state",
+  "snapshot": {
+    "snapshot_id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "frontier_event_id": null,
+    "frontier_event_count": 0,
+    "chain_head": "de84c29d7e74ec3e0ac6db8d29ad38be698cacc529bd530f004144e36f06e42b",
+    "projection_versions": {"agent_operations": 1},
+    "schema_versions": {"agents.runs_current": 1}
+  },
+  "results": [{
+    "name": "query",
+    "columns": [],
+    "rows": [],
+    "has_more": true,
+    "next_cursor": null,
+    "stats": {"rows_examined": 0, "bytes_read": 0, "elapsed_ms": 0}
+  }]
+}

@@ -1,0 +1,424 @@
+{
+  "contract_version": 1,
+  "projection": {"name": "agent_operations", "version": 1},
+  "field_type_encoding": {
+    "scalar": "type names use the Groundhog Query P0 logical type names",
+    "list": "type is list and element_type names the supported scalar element type"
+  },
+  "relations": [
+    {
+      "relation": "agents.runs_current",
+      "legacy_name": "runs_current",
+      "description": "Current state and usage totals for each agent run.",
+      "schema_version": 1,
+      "primary_key": ["run_id"],
+      "fields": [
+        {"name":"run_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"demo_session_id","type":"utf8","nullable":true},
+        {"name":"session_id","type":"utf8","nullable":false},
+        {"name":"status","type":"utf8","nullable":false},
+        {"name":"started_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"completed_at","type":"timestamp_us_utc","nullable":true},
+        {"name":"duration_ms","type":"u64","nullable":true},
+        {"name":"model_id","type":"utf8","nullable":true},
+        {"name":"input_tokens","type":"u64","nullable":false},
+        {"name":"output_tokens","type":"u64","nullable":false},
+        {"name":"total_tokens","type":"u64","nullable":false},
+        {"name":"tool_call_count","type":"u64","nullable":false},
+        {"name":"provider_call_count","type":"u64","nullable":false},
+        {"name":"failure_count","type":"u64","nullable":false},
+        {"name":"outcome","type":"utf8","nullable":true},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_demo_session","kind":"posting","fields":["demo_session_id"]},
+        {"name":"by_workspace","kind":"posting","fields":["workspace_id"]},
+        {"name":"by_status","kind":"posting","fields":["status"]},
+        {"name":"by_started","kind":"ordered","fields":["started_at","run_id"]},
+        {"name":"by_completed","kind":"ordered","fields":["completed_at","run_id"]}
+      ]
+    },
+    {
+      "relation": "agents.session_timeline",
+      "legacy_name": "session_timeline",
+      "description": "Ordered session events for playback and causal lookup.",
+      "schema_version": 1,
+      "primary_key": ["session_id", "sequence"],
+      "fields": [
+        {"name":"session_id","type":"utf8","nullable":false},
+        {"name":"sequence","type":"u64","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"demo_session_id","type":"utf8","nullable":true},
+        {"name":"run_id","type":"utf8","nullable":true},
+        {"name":"kind","type":"utf8","nullable":false},
+        {"name":"occurred_at","type":"utf8","nullable":true},
+        {"name":"observed_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"summary","type":"utf8","nullable":false},
+        {"name":"tool_call_id","type":"utf8","nullable":true},
+        {"name":"call_id","type":"utf8","nullable":true},
+        {"name":"source_event_id","type":"uuid","nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_tool_call_sequence","kind":"ordered","fields":["tool_call_id","sequence","session_id"]},
+        {"name":"by_call_sequence","kind":"ordered","fields":["call_id","sequence","session_id"]}
+      ]
+    },
+    {
+      "relation": "agents.tool_calls_current",
+      "legacy_name": "tool_calls_current",
+      "description": "Current tool-call state and provider resolution.",
+      "schema_version": 1,
+      "primary_key": ["tool_call_id"],
+      "fields": [
+        {"name":"tool_call_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"demo_session_id","type":"utf8","nullable":true},
+        {"name":"session_id","type":"utf8","nullable":false},
+        {"name":"run_id","type":"utf8","nullable":false},
+        {"name":"step_id","type":"utf8","nullable":true},
+        {"name":"tool_name","type":"utf8","nullable":false},
+        {"name":"state","type":"utf8","nullable":false},
+        {"name":"initial_resolution","type":"utf8","nullable":true},
+        {"name":"final_resolution","type":"utf8","nullable":true},
+        {"name":"started_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"completed_at","type":"timestamp_us_utc","nullable":true},
+        {"name":"duration_ms","type":"u64","nullable":true},
+        {"name":"call_id","type":"utf8","nullable":true},
+        {"name":"arguments","type":"json","nullable":false},
+        {"name":"result","type":"json","nullable":true},
+        {"name":"error","type":"utf8","nullable":true},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_run","kind":"posting","fields":["run_id"]},
+        {"name":"by_initial_resolution","kind":"posting","fields":["initial_resolution"]},
+        {"name":"by_final_resolution","kind":"posting","fields":["final_resolution"]},
+        {"name":"by_started","kind":"ordered","fields":["started_at","tool_call_id"]}
+      ]
+    },
+    {
+      "relation": "calls.calls_current",
+      "legacy_name": "calls_current",
+      "description": "Current governed call state from request through resolution.",
+      "schema_version": 1,
+      "primary_key": ["call_id"],
+      "fields": [
+        {"name":"call_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"demo_session_id","type":"utf8","nullable":true},
+        {"name":"run_id","type":"utf8","nullable":true},
+        {"name":"tool_call_id","type":"utf8","nullable":true},
+        {"name":"provider","type":"utf8","nullable":false},
+        {"name":"operation","type":"utf8","nullable":false},
+        {"name":"mode","type":"utf8","nullable":false},
+        {"name":"policy_result","type":"utf8","nullable":true},
+        {"name":"state","type":"utf8","nullable":false},
+        {"name":"initial_resolution","type":"utf8","nullable":true},
+        {"name":"resolution","type":"utf8","nullable":true},
+        {"name":"requested_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"resolved_at","type":"timestamp_us_utc","nullable":true},
+        {"name":"attempt_count","type":"u64","nullable":false},
+        {"name":"request_hash","type":"utf8","nullable":false},
+        {"name":"result","type":"json","nullable":true},
+        {"name":"error","type":"utf8","nullable":true},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_demo_session","kind":"posting","fields":["demo_session_id"]},
+        {"name":"by_workspace","kind":"posting","fields":["workspace_id"]},
+        {"name":"by_provider","kind":"posting","fields":["provider"]},
+        {"name":"by_operation","kind":"posting","fields":["operation"]},
+        {"name":"by_mode","kind":"posting","fields":["mode"]},
+        {"name":"by_policy_result","kind":"posting","fields":["policy_result"]},
+        {"name":"by_state","kind":"posting","fields":["state"]},
+        {"name":"by_resolution","kind":"posting","fields":["resolution"]},
+        {"name":"by_run","kind":"posting","fields":["run_id"]},
+        {"name":"by_requested","kind":"ordered","fields":["requested_at","call_id"]}
+      ]
+    },
+    {
+      "relation": "actions.actions_pending",
+      "legacy_name": "actions_pending",
+      "description": "Calls that require a human approval decision.",
+      "schema_version": 1,
+      "primary_key": ["call_id"],
+      "fields": [
+        {"name":"call_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"demo_session_id","type":"utf8","nullable":false},
+        {"name":"run_id","type":"utf8","nullable":true},
+        {"name":"tool_call_id","type":"utf8","nullable":true},
+        {"name":"state","type":"utf8","nullable":false},
+        {"name":"requested_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"expires_at","type":"timestamp_us_utc","nullable":true},
+        {"name":"risk","type":"utf8","nullable":false},
+        {"name":"provider","type":"utf8","nullable":false},
+        {"name":"operation","type":"utf8","nullable":false},
+        {"name":"arguments","type":"json","nullable":false},
+        {"name":"action_hash","type":"utf8","nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_demo_session","kind":"posting","fields":["demo_session_id"]},
+        {"name":"by_state","kind":"posting","fields":["state"]},
+        {"name":"by_requested","kind":"ordered","fields":["requested_at","call_id"]}
+      ]
+    },
+    {
+      "relation": "providers.state_observed",
+      "legacy_name": "provider_state_observed",
+      "description": "Latest state observed directly from the provider.",
+      "schema_version": 1,
+      "primary_key": ["demo_session_id", "resource_type", "resource_id"],
+      "fields": [
+        {"name":"demo_session_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"resource_type","type":"utf8","nullable":false},
+        {"name":"resource_id","type":"utf8","nullable":false},
+        {"name":"remote_revision","type":"utf8","nullable":true},
+        {"name":"state","type":"json","nullable":false},
+        {"name":"updated_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"call_id","type":"utf8","nullable":true},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_demo_session","kind":"posting","fields":["demo_session_id"]},
+        {"name":"by_resource_type","kind":"posting","fields":["resource_type"]},
+        {"name":"by_updated","kind":"ordered","fields":["updated_at","resource_id","demo_session_id","resource_type"]}
+      ]
+    },
+    {
+      "relation": "providers.state_optimistic",
+      "legacy_name": "provider_state_optimistic",
+      "description": "Accepted intent overlays that await provider confirmation.",
+      "schema_version": 1,
+      "primary_key": ["demo_session_id", "resource_type", "resource_id"],
+      "fields": [
+        {"name":"demo_session_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"resource_type","type":"utf8","nullable":false},
+        {"name":"resource_id","type":"utf8","nullable":false},
+        {"name":"effect_key","type":"utf8","nullable":false},
+        {"name":"state","type":"json","nullable":false},
+        {"name":"updated_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"call_id","type":"utf8","nullable":false},
+        {"name":"resolution","type":"utf8","nullable":true},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_demo_session","kind":"posting","fields":["demo_session_id"]},
+        {"name":"by_resource_type","kind":"posting","fields":["resource_type"]},
+        {"name":"by_updated","kind":"ordered","fields":["updated_at","resource_id","demo_session_id","resource_type"]}
+      ]
+    },
+    {
+      "relation": "providers.state_effective",
+      "legacy_name": "provider_state_effective",
+      "description": "Observed provider state with valid optimistic overlays.",
+      "schema_version": 1,
+      "primary_key": ["demo_session_id", "resource_type", "resource_id"],
+      "fields": [
+        {"name":"demo_session_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"resource_type","type":"utf8","nullable":false},
+        {"name":"resource_id","type":"utf8","nullable":false},
+        {"name":"remote_revision","type":"utf8","nullable":true},
+        {"name":"state","type":"json","nullable":false},
+        {"name":"updated_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"call_id","type":"utf8","nullable":true},
+        {"name":"optimistic","type":"bool","nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_demo_session","kind":"posting","fields":["demo_session_id"]},
+        {"name":"by_resource_type","kind":"posting","fields":["resource_type"]},
+        {"name":"by_updated","kind":"ordered","fields":["updated_at","resource_id","demo_session_id","resource_type"]}
+      ]
+    },
+    {
+      "relation": "memory.memory_current",
+      "legacy_name": "memory_current",
+      "description": "Latest active memory value with confidence and evidence.",
+      "schema_version": 1,
+      "primary_key": ["scope_id", "subject", "key"],
+      "fields": [
+        {"name":"scope_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"demo_session_id","type":"utf8","nullable":true},
+        {"name":"subject","type":"utf8","nullable":false},
+        {"name":"key","type":"utf8","nullable":false},
+        {"name":"value","type":"json","nullable":false},
+        {"name":"confidence","type":"f64","nullable":false},
+        {"name":"memory_event_id","type":"uuid","nullable":false},
+        {"name":"updated_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"extractor_version","type":"utf8","nullable":false},
+        {"name":"evidence_classes","type":"list","element_type":"utf8","element_nullable":false,"nullable":false},
+        {"name":"evidence_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_scope","kind":"posting","fields":["scope_id"]},
+        {"name":"by_subject","kind":"posting","fields":["subject"]},
+        {"name":"by_key","kind":"posting","fields":["key"]},
+        {"name":"by_evidence_class","kind":"posting","fields":["evidence_classes"]},
+        {"name":"by_updated","kind":"ordered","fields":["updated_at","scope_id","subject","key"]}
+      ]
+    },
+    {
+      "relation": "memory.memory_history",
+      "legacy_name": "memory_history",
+      "description": "Ordered memory proposals, decisions, corrections, and retractions.",
+      "schema_version": 1,
+      "primary_key": ["scope_id", "subject", "key", "memory_event_id"],
+      "fields": [
+        {"name":"scope_id","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"demo_session_id","type":"utf8","nullable":true},
+        {"name":"subject","type":"utf8","nullable":false},
+        {"name":"key","type":"utf8","nullable":false},
+        {"name":"memory_event_id","type":"uuid","nullable":false},
+        {"name":"sequence","type":"u64","nullable":false},
+        {"name":"transition","type":"utf8","nullable":false},
+        {"name":"value","type":"json","nullable":true},
+        {"name":"confidence","type":"f64","nullable":true},
+        {"name":"occurred_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"supersedes_event_id","type":"uuid","nullable":true},
+        {"name":"extractor_version","type":"utf8","nullable":false},
+        {"name":"evidence_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_memory_sequence","kind":"ordered","fields":["scope_id","subject","key","sequence","memory_event_id"]}
+      ]
+    },
+    {
+      "relation": "memory.memory_evidence",
+      "legacy_name": "memory_evidence",
+      "description": "Evidence links for current and historical memory values.",
+      "schema_version": 1,
+      "primary_key": ["memory_event_id", "evidence_event_id"],
+      "fields": [
+        {"name":"memory_event_id","type":"uuid","nullable":false},
+        {"name":"evidence_event_id","type":"uuid","nullable":false},
+        {"name":"scope_id","type":"utf8","nullable":false},
+        {"name":"evidence_class","type":"utf8","nullable":false},
+        {"name":"linked_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": []
+    },
+    {
+      "relation": "api.health_minute",
+      "legacy_name": "api_health_minute",
+      "description": "Per-minute provider operation count, failure, and latency values.",
+      "schema_version": 1,
+      "primary_key": ["provider", "operation", "minute"],
+      "fields": [
+        {"name":"provider","type":"utf8","nullable":false},
+        {"name":"operation","type":"utf8","nullable":false},
+        {"name":"minute","type":"timestamp_us_utc","nullable":false},
+        {"name":"request_count","type":"u64","nullable":false},
+        {"name":"error_count","type":"u64","nullable":false},
+        {"name":"failure_rate","type":"f64","nullable":false},
+        {"name":"latency_p50_ms","type":"u64","nullable":false},
+        {"name":"latency_p95_ms","type":"u64","nullable":false},
+        {"name":"latency_p99_ms","type":"u64","nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_provider","kind":"posting","fields":["provider"]},
+        {"name":"by_operation","kind":"posting","fields":["operation"]},
+        {"name":"by_minute","kind":"ordered","fields":["minute","provider","operation"]}
+      ]
+    },
+    {
+      "relation": "evaluations.current",
+      "legacy_name": "evaluations_current",
+      "description": "Latest evaluation for each run and evaluator.",
+      "schema_version": 1,
+      "primary_key": ["run_id", "evaluator"],
+      "fields": [
+        {"name":"run_id","type":"utf8","nullable":false},
+        {"name":"evaluator","type":"utf8","nullable":false},
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"demo_session_id","type":"utf8","nullable":true},
+        {"name":"evaluator_version","type":"utf8","nullable":false},
+        {"name":"score","type":"f64","nullable":true},
+        {"name":"passed","type":"bool","nullable":false},
+        {"name":"flags","type":"list","element_type":"utf8","element_nullable":false,"nullable":false},
+        {"name":"evidence_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false},
+        {"name":"evaluated_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": []
+    },
+    {
+      "relation": "usage.workspace_daily",
+      "legacy_name": "workspace_usage_daily",
+      "description": "Daily agent, model, tool, and provider usage by workspace.",
+      "schema_version": 1,
+      "primary_key": ["workspace_id", "day"],
+      "fields": [
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"day","type":"utf8","nullable":false},
+        {"name":"run_count","type":"u64","nullable":false},
+        {"name":"input_tokens","type":"u64","nullable":false},
+        {"name":"output_tokens","type":"u64","nullable":false},
+        {"name":"total_tokens","type":"u64","nullable":false},
+        {"name":"tool_call_count","type":"u64","nullable":false},
+        {"name":"provider_call_count","type":"u64","nullable":false},
+        {"name":"failure_count","type":"u64","nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": []
+    },
+    {
+      "relation": "usage.usage_by_operation",
+      "legacy_name": "usage_by_operation",
+      "description": "Daily provider operation usage by workspace.",
+      "schema_version": 1,
+      "primary_key": ["workspace_id", "day", "provider", "operation"],
+      "fields": [
+        {"name":"workspace_id","type":"utf8","nullable":false},
+        {"name":"day","type":"utf8","nullable":false},
+        {"name":"provider","type":"utf8","nullable":false},
+        {"name":"operation","type":"utf8","nullable":false},
+        {"name":"model_tokens","type":"u64","nullable":false},
+        {"name":"tool_call_count","type":"u64","nullable":false},
+        {"name":"provider_call_count","type":"u64","nullable":false},
+        {"name":"failure_count","type":"u64","nullable":false},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_provider","kind":"posting","fields":["provider"]},
+        {"name":"by_operation","kind":"posting","fields":["operation"]}
+      ]
+    },
+    {
+      "relation": "projections.state",
+      "legacy_name": "projection_state",
+      "description": "Published projection frontier, counts, hashes, and rebuild state.",
+      "schema_version": 1,
+      "primary_key": ["projection_name"],
+      "fields": [
+        {"name":"projection_name","type":"utf8","nullable":false},
+        {"name":"projection_version","type":"u64","nullable":false},
+        {"name":"status","type":"utf8","nullable":false},
+        {"name":"frontier_event_id","type":"uuid","nullable":true},
+        {"name":"frontier_event_count","type":"u64","nullable":false},
+        {"name":"chain_head","type":"utf8","nullable":false},
+        {"name":"relation_count","type":"u64","nullable":false},
+        {"name":"row_count","type":"u64","nullable":false},
+        {"name":"logical_state_hash","type":"utf8","nullable":true},
+        {"name":"updated_at","type":"timestamp_us_utc","nullable":false},
+        {"name":"last_error","type":"utf8","nullable":true},
+        {"name":"source_event_ids","type":"list","element_type":"uuid","element_nullable":false,"nullable":false}
+      ],
+      "indexes": [
+        {"name":"by_status","kind":"posting","fields":["status"]}
+      ]
+    }
+  ]
+}

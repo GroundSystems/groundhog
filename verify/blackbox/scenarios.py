@@ -8,6 +8,8 @@ from pathlib import Path
 import threading
 from typing import Any, Callable
 
+from verify.backend import BackendOptions
+
 from .history import HistoryRecorder, OperationRecord
 from .linearizability import CheckResult, CheckStatus, check_history
 from .transport import GroundhogProcess
@@ -76,9 +78,10 @@ def _with_process(
     seed: int,
     name: str,
     run: Callable[[GroundhogProcess, HistoryRecorder], None],
+    backend: BackendOptions,
 ) -> ScenarioResult:
     recorder = HistoryRecorder(output_dir / f"{name}.json", seed)
-    with GroundhogProcess(binary) as process:
+    with GroundhogProcess(binary, backend=backend) as process:
         run(process, recorder)
     result = _record_result(name, recorder)
     result.require_linearizable()
@@ -86,12 +89,17 @@ def _with_process(
 
 
 def run_append_scenarios(
-    binary: str | Path, output_dir: str | Path, *, seed: int = 1
+    binary: str | Path,
+    output_dir: str | Path,
+    *,
+    seed: int = 1,
+    backend: BackendOptions | None = None,
 ) -> tuple[ScenarioResult, ...]:
     """Run retry, conflict, precondition, and concurrent append scenarios."""
 
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
+    selected_backend = backend or BackendOptions()
 
     def retry(process: GroundhogProcess, recorder: HistoryRecorder) -> None:
         batch = event_batch("retry", "retry")
@@ -255,7 +263,7 @@ def run_append_scenarios(
         ("append-atomic-batch", atomic_batch),
     )
     return tuple(
-        _with_process(binary, destination, seed + index, name, scenario)
+        _with_process(binary, destination, seed + index, name, scenario, selected_backend)
         for index, (name, scenario) in enumerate(cases)
     )
 
@@ -266,6 +274,7 @@ def run_retirement_race_scenarios(
     *,
     seed: int = 100,
     iterations: int = 8,
+    backend: BackendOptions | None = None,
 ) -> tuple[ScenarioResult, ...]:
     """Race one new append against retirement of the same source."""
 
@@ -273,6 +282,7 @@ def run_retirement_race_scenarios(
         raise ValueError("iterations must be positive")
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
+    selected_backend = backend or BackendOptions()
 
     def make_race(iteration: int) -> Callable[[GroundhogProcess, HistoryRecorder], None]:
         def race(process: GroundhogProcess, recorder: HistoryRecorder) -> None:
@@ -341,18 +351,24 @@ def run_retirement_race_scenarios(
             seed + iteration,
             f"retirement-race-{iteration}",
             make_race(iteration),
+            selected_backend,
         )
         for iteration in range(iterations)
     )
 
 
 def run_replay_scenarios(
-    binary: str | Path, output_dir: str | Path, *, seed: int = 200
+    binary: str | Path,
+    output_dir: str | Path,
+    *,
+    seed: int = 200,
+    backend: BackendOptions | None = None,
 ) -> tuple[ScenarioResult, ...]:
     """Check replay visibility and anchored stream pagination."""
 
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
+    selected_backend = backend or BackendOptions()
 
     def replay_visibility(process: GroundhogProcess, recorder: HistoryRecorder) -> None:
         committed = recorder.request(
@@ -452,6 +468,63 @@ def run_replay_scenarios(
         ("streams-anchored-pagination", anchored_streams),
     )
     return tuple(
-        _with_process(binary, destination, seed + index, name, scenario)
+        _with_process(binary, destination, seed + index, name, scenario, selected_backend)
         for index, (name, scenario) in enumerate(cases)
+    )
+
+
+def run_s3_local_state_loss_scenario(
+    binary: str | Path,
+    output_dir: str | Path,
+    *,
+    seed: int,
+    backend: BackendOptions,
+) -> ScenarioResult:
+    """Verify an acknowledged batch after deleting every local deployment file."""
+    if backend.name != "s3":
+        raise ValueError("local-state-loss scenario requires the S3 backend")
+
+    def local_state_loss(process: GroundhogProcess, recorder: HistoryRecorder) -> None:
+        batch = event_batch("local-state-loss", "durable")
+        committed = recorder.request(
+            process.client,
+            client_id="local-state-loss",
+            operation_id="local-state-loss-commit",
+            method="POST",
+            target="/v1/events",
+            json_body=batch,
+        )
+        if _response_body(committed).get("status") != "committed":
+            raise AssertionError("local-state-loss batch did not commit")
+        process.reset_local_state()
+        duplicate = recorder.request(
+            process.client,
+            client_id="local-state-loss",
+            operation_id="local-state-loss-duplicate",
+            method="POST",
+            target="/v1/events",
+            json_body=batch,
+        )
+        if _response_body(duplicate).get("status") != "duplicate":
+            raise AssertionError("reattached deployment did not return the durable receipt")
+        replay = recorder.request(
+            process.client,
+            client_id="local-state-loss",
+            operation_id="local-state-loss-replay",
+            method="GET",
+            target="/v1/events?source=verify",
+        )
+        events = _response_body(replay).get("events")
+        if not isinstance(events, list) or len(events) != 1:
+            raise AssertionError("reattached deployment did not replay the durable event")
+
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    return _with_process(
+        binary,
+        destination,
+        seed,
+        "s3-local-state-loss",
+        local_state_loss,
+        backend,
     )

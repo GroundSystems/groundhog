@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "consistency": {
+    "mode": "published"
+  },
+  "query": {
+    "relation": "agents.runs_current",
+    "select": [
+      "run_id"
+    ],
+    "filter": {
+      "op": "eq",
+      "field": "status",
+      "value": {
+        "name": "completed"
+      }
+    }
+  }
+}

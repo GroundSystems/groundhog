@@ -1,0 +1,17 @@
+{
+  "v": 1,
+  "errors": {
+    "invalid_query": 400,
+    "invalid_cursor": 400,
+    "relation_not_found": 404,
+    "field_not_found": 404,
+    "query_timeout": 408,
+    "index_required": 409,
+    "frontier_chain_mismatch": 409,
+    "cursor_expired": 410,
+    "query_limit_exceeded": 422,
+    "generation_corrupt": 500,
+    "query_unavailable": 503,
+    "projection_frontier_timeout": 504
+  }
+}

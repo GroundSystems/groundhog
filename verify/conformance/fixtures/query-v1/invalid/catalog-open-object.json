@@ -1,0 +1,45 @@
+{
+  "v": 1,
+  "snapshot": {
+    "snapshot_id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "frontier_event_id": null,
+    "frontier_event_count": 0,
+    "chain_head": "de84c29d7e74ec3e0ac6db8d29ad38be698cacc529bd530f004144e36f06e42b",
+    "projection_versions": {
+      "agent_operations": 1
+    },
+    "schema_versions": {
+      "agents.runs_current": 1
+    }
+  },
+  "relations": [
+    {
+      "relation": "agents.runs_current",
+      "description": "Current state for each agent run.",
+      "schema_version": 1,
+      "projection": {
+        "name": "agent_operations",
+        "version": 1
+      },
+      "primary_key": [
+        "run_id"
+      ],
+      "fields": [
+        {
+          "name": "run_id",
+          "type": "uuid",
+          "nullable": false
+        }
+      ],
+      "indexes": [],
+      "row_count": 0,
+      "freshness": {
+        "status": "current",
+        "log_frontier_event_count": 0,
+        "lag_events": 0,
+        "failure": null
+      },
+      "storage_path": "internal/runs"
+    }
+  ]
+}

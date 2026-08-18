@@ -3,8 +3,10 @@
 Groundhog provides downloads, user documentation, and a published interface.
 The private `GroundSystems/groundhog-src` repository contains the canonical Groundhog source.
 
-Groundhog 0.2 stores and serves a durable append-only event log. Applications use replay to build
-their own derived views. Groundhog does not include local SQL or a warehouse.
+Groundhog 0.3 stores and serves a durable append-only event log. An optional local Query service
+adds typed indexed reads over immutable snapshots. The current binary exposes the built-in
+`groundhog.events` relation, Catalog metadata, the JSON Query API, and matching CLI commands.
+Groundhog does not include SQL or a warehouse.
 
 ## Support and feature requests
 
@@ -24,7 +26,8 @@ maintains the formula.
 
 Versioned Apple Silicon macOS and x86-64 Linux archives and their SHA-256 checksums are published
 under [GitHub Releases](https://github.com/GroundSystems/groundhog/releases). Every archive includes
-the `groundhog` binary, build provenance, the Groundhog license, and third-party license notices.
+the `groundhog` binary, build provenance, dependency roots, licenses, the OpenAPI contract,
+projection contracts, and conformance fixtures.
 
 ## Documentation
 

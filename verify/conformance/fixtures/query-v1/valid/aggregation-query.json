@@ -1,0 +1,37 @@
+{
+  "v": 1,
+  "consistency": {
+    "mode": "published"
+  },
+  "query": {
+    "relation": "agents.runs_current",
+    "filter": {
+      "op": "eq",
+      "field": "workspace_id",
+      "value": "workspace_demo"
+    },
+    "aggregate": {
+      "group_by": [
+        "status"
+      ],
+      "measures": [
+        {
+          "name": "runs",
+          "op": "count"
+        },
+        {
+          "name": "tokens",
+          "op": "sum",
+          "field": "total_tokens"
+        }
+      ]
+    },
+    "order_by": [
+      {
+        "field": "runs",
+        "direction": "desc"
+      }
+    ],
+    "limit": 25
+  }
+}

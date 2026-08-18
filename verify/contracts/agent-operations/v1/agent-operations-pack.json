@@ -1,0 +1,66 @@
+{
+  "manifest_version": 1,
+  "name": "agent_operations",
+  "version": 1,
+  "projection": {"name":"agent_operations","version":1},
+  "reducer_modules": ["runtime", "provider", "memory", "analytics"],
+  "event_schema_manifest": {
+    "path": "agent-record-event-manifest.json",
+    "hash": "sha256:0b8d71d745a5d5ea30bf690c7df043a8142f72799368bf6580c8137dd524531d"
+  },
+  "artifacts": [
+    {"role":"event_schemas","path":"agent-record-event-schemas.json","hash":"sha256:621656377a10c70e3478e359d94d76ebd3fce424462212e4972819d9cc8880ab"},
+    {"role":"relations","path":"agent-operations-relations.json","hash":"sha256:b27458053188504573713bec7e0f42261f8c84401fcdc676e0a5be1afe2bd8df"},
+    {"role":"query_matrix","path":"agent-operations-query-matrix.json","hash":"sha256:80bd98a8035edf7342d6c348aed5244411676c32dc0e24f5f31bc7f7a6c1624f"},
+    {"role":"saved_queries","path":"agent-operations-saved-queries.json","hash":"sha256:2ccc4c0735b4ad1f15fa16680bb97a1a613cf8cf64fe27cd1c3012d0ce1f6ef8"}
+  ],
+  "relations": [
+    "actions.actions_pending",
+    "agents.runs_current",
+    "agents.session_timeline",
+    "agents.tool_calls_current",
+    "api.health_minute",
+    "calls.calls_current",
+    "evaluations.current",
+    "memory.memory_current",
+    "memory.memory_evidence",
+    "memory.memory_history",
+    "projections.state",
+    "providers.state_effective",
+    "providers.state_observed",
+    "providers.state_optimistic",
+    "usage.usage_by_operation",
+    "usage.workspace_daily"
+  ],
+  "built_in_sources": ["groundhog.events"],
+  "query_matrix_ids": ["Q01","Q02","Q03","Q04","Q05","Q06","Q07","Q08","Q09","Q10","Q11","Q12","Q13","Q14","Q15","Q16","Q17","Q18","Q19","Q20","Q21","Q22","Q23"],
+  "saved_query_ids": [
+    "provider_latency_and_failure_rate_by_operation",
+    "runs_waiting_for_human_approval",
+    "tool_calls_with_initially_unknown_outcome",
+    "current_memory_from_failed_or_retried_calls",
+    "all_events_and_views_for_tool_call",
+    "run_outcomes_before_and_after_retry",
+    "daily_usage_by_workspace",
+    "policy_denied_calls_and_requesting_runs"
+  ],
+  "legacy_relation_aliases": {
+    "actions_pending":"actions.actions_pending",
+    "api_health_minute":"api.health_minute",
+    "calls_current":"calls.calls_current",
+    "events_index":"groundhog.events",
+    "evaluations_current":"evaluations.current",
+    "memory_current":"memory.memory_current",
+    "memory_evidence":"memory.memory_evidence",
+    "memory_history":"memory.memory_history",
+    "projection_state":"projections.state",
+    "provider_state_effective":"providers.state_effective",
+    "provider_state_observed":"providers.state_observed",
+    "provider_state_optimistic":"providers.state_optimistic",
+    "runs_current":"agents.runs_current",
+    "session_timeline":"agents.session_timeline",
+    "tool_calls_current":"agents.tool_calls_current",
+    "usage_by_operation":"usage.usage_by_operation",
+    "workspace_usage_daily":"usage.workspace_daily"
+  }
+}

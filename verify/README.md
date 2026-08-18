@@ -75,3 +75,10 @@ private test modules.
 python3 -m unittest discover -s verify/conformance/tests -t . -p 'test_*.py'
 python3 -m unittest discover -s verify/blackbox/tests -t . -p 'test_*.py'
 ```
+
+## Backend selection
+
+The conformance and black-box executors accept `--backend local` or an explicit no-delete S3 test
+location. S3 mode requires `--s3-bucket`, `--s3-region`, and one unique
+`groundhog-tests/<run-id>` parent prefix. The harness creates a separate remote child prefix for each
+process. It never deletes remote objects.

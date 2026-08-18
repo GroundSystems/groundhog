@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "consistency": {"mode": "published"},
+  "query": {
+    "relation": "agents.runs_current",
+    "aggregate": {
+      "group_by": ["status"],
+      "measures": [{"name": "runs", "op": "count"}]
+    },
+    "after": "cursor-not-valid-for-aggregates"
+  }
+}
