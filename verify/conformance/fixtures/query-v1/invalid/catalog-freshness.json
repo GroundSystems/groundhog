@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "snapshot": {
+    "snapshot_id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "frontier_event_id": "019c0000-0000-7000-8000-000000000004",
+    "frontier_event_count": 4,
+    "chain_head": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "projection_versions": {"agent_operations": 1},
+    "schema_versions": {"agents.runs_current": 1}
+  },
+  "relations": [{
+    "relation": "agents.runs_current",
+    "description": "Current runs.",
+    "schema_version": 1,
+    "projection": {"name": "agent_operations", "version": 1},
+    "primary_key": ["run_id"],
+    "fields": [{"name": "run_id", "type": "uuid", "nullable": false}],
+    "indexes": [],
+    "row_count": 1,
+    "freshness": {
+      "status": "catching_up",
+      "log_frontier_event_count": 6,
+      "lag_events": 1,
+      "failure": null
+    }
+  }]
+}

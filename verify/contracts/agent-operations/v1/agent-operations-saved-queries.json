@@ -1,0 +1,281 @@
+{
+  "contract_version": 1,
+  "name": "agent_operations_saved_queries",
+  "version": 1,
+  "template_encoding": {
+    "parameter_reference": {"$param": "parameter_name"},
+    "prior_result_reference": {"$result": {"step": "step_id", "result": "result_name", "field": "column_name"}},
+    "prior_result_union": {"$result_union": [{"step": "step_id", "result": "result_name", "field": "column_name"}]},
+    "rule": "A client flattens and deduplicates result unions. It replaces all references with typed values before it sends the closed Query API request."
+  },
+  "saved_queries": [
+    {
+      "id": "provider_latency_and_failure_rate_by_operation",
+      "title": "Provider latency and failure rate by operation",
+      "parameters": [
+        {"name":"from_minute","type":"timestamp_us_utc","sample":"2026-08-11T00:00:00.000000Z"},
+        {"name":"through_minute","type":"timestamp_us_utc","sample":"2026-08-12T00:00:00.000000Z"}
+      ],
+      "workflow": [
+        {
+          "id": "health",
+          "query_matrix_ids": ["Q19"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "query": {
+              "relation": "api.health_minute",
+              "select": ["provider","operation","minute","request_count","error_count","failure_rate","latency_p50_ms","latency_p95_ms","latency_p99_ms"],
+              "filter": {"op":"and","args":[
+                {"op":"gte","field":"minute","value":{"$param":"from_minute"}},
+                {"op":"lt","field":"minute","value":{"$param":"through_minute"}}
+              ]},
+              "order_by": [{"field":"minute","direction":"asc"}],
+              "limit": 1000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "runs_waiting_for_human_approval",
+      "title": "Runs that wait for human approval",
+      "parameters": [{"name":"demo_session_id","type":"utf8","sample":"demo_session_0001"}],
+      "workflow": [
+        {
+          "id": "waiting",
+          "query_matrix_ids": ["Q03","Q12"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "queries": [
+              {"name":"runs","query":{
+                "relation":"agents.runs_current",
+                "select":["run_id","session_id","status","started_at","tool_call_count"],
+                "filter":{"op":"and","args":[
+                  {"op":"eq","field":"demo_session_id","value":{"$param":"demo_session_id"}},
+                  {"op":"eq","field":"status","value":"waiting_for_approval"}
+                ]},
+                "order_by":[{"field":"started_at","direction":"desc"}],
+                "limit":100
+              }},
+              {"name":"actions","query":{
+                "relation":"actions.actions_pending",
+                "select":["call_id","run_id","provider","operation","risk","requested_at","expires_at"],
+                "filter":{"op":"and","args":[
+                  {"op":"eq","field":"demo_session_id","value":{"$param":"demo_session_id"}},
+                  {"op":"eq","field":"state","value":"pending"}
+                ]},
+                "order_by":[{"field":"requested_at","direction":"asc"}],
+                "limit":100
+              }}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "tool_calls_with_initially_unknown_outcome",
+      "title": "Tool calls with an initially unknown provider outcome",
+      "parameters": [{"name":"run_id","type":"utf8","sample":"run_0001"}],
+      "workflow": [
+        {
+          "id": "tool_calls",
+          "query_matrix_ids": ["Q09"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "query": {
+              "relation":"agents.tool_calls_current",
+              "select":["tool_call_id","run_id","tool_name","initial_resolution","final_resolution","started_at","completed_at","call_id"],
+              "filter":{"op":"and","args":[
+                {"op":"eq","field":"run_id","value":{"$param":"run_id"}},
+                {"op":"eq","field":"initial_resolution","value":"outcome_unknown"}
+              ]},
+              "order_by":[{"field":"started_at","direction":"asc"}],
+              "limit":100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "current_memory_from_failed_or_retried_calls",
+      "title": "Current memory from failed or retried calls",
+      "parameters": [{"name":"scope_id","type":"utf8","sample":"demo_session_0001"}],
+      "workflow": [
+        {
+          "id": "memory",
+          "query_matrix_ids": ["Q16"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "query": {
+              "relation":"memory.memory_current",
+              "select":["scope_id","subject","key","value","confidence","evidence_classes","evidence_event_ids","updated_at"],
+              "filter":{"op":"and","args":[
+                {"op":"eq","field":"scope_id","value":{"$param":"scope_id"}},
+                {"op":"contains_any","field":"evidence_classes","values":["failed_call","retried_call"]}
+              ]},
+              "order_by":[{"field":"updated_at","direction":"desc"}],
+              "limit":100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "all_events_and_views_for_tool_call",
+      "title": "All events and views caused by one tool call",
+      "parameters": [{"name":"tool_call_id","type":"utf8","sample":"tool_0001"}],
+      "workflow": [
+        {
+          "id": "views",
+          "query_matrix_ids": ["Q06","Q08"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "queries": [
+              {"name":"timeline","query":{
+                "relation":"agents.session_timeline",
+                "select":["session_id","sequence","kind","summary","call_id","source_event_ids"],
+                "filter":{"op":"eq","field":"tool_call_id","value":{"$param":"tool_call_id"}},
+                "order_by":[{"field":"sequence","direction":"asc"}],
+                "limit":100
+              }},
+              {"name":"tool_call","query":{
+                "relation":"agents.tool_calls_current",
+                "select":["tool_call_id","run_id","call_id","state","initial_resolution","final_resolution","source_event_ids"],
+                "filter":{"op":"eq","field":"tool_call_id","value":{"$param":"tool_call_id"}},
+                "limit":1
+              }}
+            ]
+          }
+        },
+        {
+          "id": "call",
+          "depends_on": ["views"],
+          "query_matrix_ids": ["Q11"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "query": {
+              "relation":"calls.calls_current",
+              "select":["call_id","provider","operation","policy_result","state","initial_resolution","resolution","source_event_ids"],
+              "filter":{"op":"eq","field":"call_id","value":{"$result":{"step":"views","result":"tool_call","field":"call_id"}}},
+              "limit":1
+            }
+          }
+        },
+        {
+          "id": "events",
+          "depends_on": ["views","call"],
+          "query_matrix_ids": ["Q02"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "query": {
+              "relation":"groundhog.events",
+              "select":["event_id","source","stream","record_key","kind","observed_at","payload"],
+              "filter":{"op":"in","field":"event_id","values":{"$result_union":[
+                {"step":"views","result":"timeline","field":"source_event_ids"},
+                {"step":"views","result":"tool_call","field":"source_event_ids"},
+                {"step":"call","result":"query","field":"source_event_ids"}
+              ]}},
+              "order_by":[{"field":"event_id","direction":"asc"}],
+              "limit":1000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "run_outcomes_before_and_after_retry",
+      "title": "Run outcomes before and after a retried step",
+      "parameters": [
+        {"name":"run_id","type":"utf8","sample":"run_0001"},
+        {"name":"session_id","type":"utf8","sample":"session_0001"}
+      ],
+      "workflow": [
+        {
+          "id": "run",
+          "query_matrix_ids": ["Q04","Q05","Q09","Q20"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "queries": [
+              {"name":"run","query":{"relation":"agents.runs_current","select":["run_id","status","outcome","failure_count","total_tokens","source_event_ids"],"filter":{"op":"eq","field":"run_id","value":{"$param":"run_id"}},"limit":1}},
+              {"name":"timeline","query":{"relation":"agents.session_timeline","select":["sequence","kind","summary","tool_call_id","call_id","source_event_ids"],"filter":{"op":"eq","field":"session_id","value":{"$param":"session_id"}},"order_by":[{"field":"sequence","direction":"asc"}],"limit":1000}},
+              {"name":"tool_calls","query":{"relation":"agents.tool_calls_current","select":["tool_call_id","state","initial_resolution","final_resolution","started_at","completed_at"],"filter":{"op":"eq","field":"run_id","value":{"$param":"run_id"}},"order_by":[{"field":"started_at","direction":"asc"}],"limit":100}},
+              {"name":"evaluations","query":{"relation":"evaluations.current","select":["evaluator","score","passed","flags","evidence_event_ids"],"filter":{"op":"eq","field":"run_id","value":{"$param":"run_id"}},"order_by":[{"field":"evaluator","direction":"asc"}],"limit":100}}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "daily_usage_by_workspace",
+      "title": "Daily model, tool, and provider usage by workspace",
+      "parameters": [
+        {"name":"workspace_id","type":"utf8","sample":"demo"},
+        {"name":"from_day","type":"utf8","sample":"2026-08-01"},
+        {"name":"through_day","type":"utf8","sample":"2026-08-13"}
+      ],
+      "workflow": [
+        {
+          "id": "usage",
+          "query_matrix_ids": ["Q21","Q22"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "queries": [
+              {"name":"workspace","query":{"relation":"usage.workspace_daily","select":["day","run_count","input_tokens","output_tokens","total_tokens","tool_call_count","provider_call_count","failure_count"],"filter":{"op":"and","args":[{"op":"eq","field":"workspace_id","value":{"$param":"workspace_id"}},{"op":"gte","field":"day","value":{"$param":"from_day"}},{"op":"lt","field":"day","value":{"$param":"through_day"}}]},"order_by":[{"field":"day","direction":"asc"}],"limit":1000}},
+              {"name":"operations","query":{"relation":"usage.usage_by_operation","select":["day","provider","operation","model_tokens","tool_call_count","provider_call_count","failure_count"],"filter":{"op":"and","args":[{"op":"eq","field":"workspace_id","value":{"$param":"workspace_id"}},{"op":"gte","field":"day","value":{"$param":"from_day"}},{"op":"lt","field":"day","value":{"$param":"through_day"}}]},"order_by":[{"field":"day","direction":"asc"}],"limit":10000}}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "policy_denied_calls_and_requesting_runs",
+      "title": "Calls denied by policy and their requesting runs",
+      "parameters": [{"name":"workspace_id","type":"utf8","sample":"demo"}],
+      "workflow": [
+        {
+          "id": "calls",
+          "query_matrix_ids": ["Q10"],
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "query": {
+              "relation":"calls.calls_current",
+              "select":["call_id","run_id","tool_call_id","provider","operation","requested_at","policy_result","source_event_ids"],
+              "filter":{"op":"and","args":[
+                {"op":"eq","field":"workspace_id","value":{"$param":"workspace_id"}},
+                {"op":"eq","field":"policy_result","value":"denied"}
+              ]},
+              "order_by":[{"field":"requested_at","direction":"desc"}],
+              "limit":100
+            }
+          }
+        },
+        {
+          "id": "runs",
+          "depends_on": ["calls"],
+          "query_matrix_ids": ["Q04"],
+          "repeat_for_each_distinct": {"step":"calls","result":"query","field":"run_id","maximum":100},
+          "request_template": {
+            "v": 1,
+            "consistency": {"mode":"published"},
+            "query": {
+              "relation":"agents.runs_current",
+              "select":["run_id","session_id","status","outcome","started_at","completed_at"],
+              "filter":{"op":"eq","field":"run_id","value":{"$result":{"step":"calls","result":"query","field":"run_id"}}},
+              "limit":1
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -71,6 +71,27 @@ class TransportTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(response.json(), {"ok": True})
 
+    def test_head_response_does_not_read_the_declared_get_body(self) -> None:
+        client_stream, server_stream = socket.socketpair()
+
+        def serve() -> None:
+            with server_stream:
+                server_stream.sendall(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n"
+                    b"Content-Type: application/json\r\n\r\n"
+                )
+
+        thread = threading.Thread(target=serve)
+        thread.start()
+        with client_stream:
+            response = UnixHttpClient("unused")._read_response(
+                client_stream, expect_body=False
+            )
+        thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.body, b"")
+
 
 if __name__ == "__main__":
     unittest.main()

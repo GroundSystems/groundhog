@@ -18,42 +18,107 @@ JsonObject = dict[str, Any]
 HTTP_METHODS = {"get", "head", "post", "put", "patch", "delete", "options", "trace"}
 DIALECT = "https://spec.openapis.org/oas/3.2/dialect/2025-09-17"
 
-EXPECTED_OPERATIONS: dict[tuple[str, str], tuple[str, set[str], str]] = {
+EXPECTED_OPERATIONS: dict[
+    tuple[str, str], tuple[str, set[str], tuple[str, ...]]
+] = {
     ("/v1/events", "post"): (
         "appendEvents",
         {"200", "400", "401", "409", "413", "415", "429", "500", "503"},
-        "#/components/parameters/NoQuery",
+        ("#/components/parameters/NoQuery",),
     ),
     ("/v1/events", "get"): (
         "replayEvents",
         {"200", "400", "401", "429", "500"},
-        "#/components/parameters/ReplayQuery",
+        ("#/components/parameters/ReplayQuery",),
     ),
     ("/v1/events", "head"): (
         "inspectReplay",
         {"200", "400", "401", "429", "500"},
-        "#/components/parameters/ReplayQuery",
+        ("#/components/parameters/ReplayQuery",),
     ),
     ("/v1/streams", "get"): (
         "listStreams",
         {"200", "400", "401", "429", "500"},
-        "#/components/parameters/StreamsQuery",
+        ("#/components/parameters/StreamsQuery",),
     ),
     ("/v1/streams", "head"): (
         "inspectStreams",
         {"200", "400", "401", "429", "500"},
-        "#/components/parameters/StreamsQuery",
+        ("#/components/parameters/StreamsQuery",),
     ),
     ("/v1/sources/retire", "post"): (
         "retireSource",
         {"200", "400", "401", "404", "413", "415", "429", "500", "503"},
-        "#/components/parameters/NoQuery",
+        ("#/components/parameters/NoQuery",),
+    ),
+    ("/v1/query", "post"): (
+        "queryRelations",
+        {
+            "200",
+            "400",
+            "401",
+            "404",
+            "408",
+            "409",
+            "410",
+            "413",
+            "415",
+            "422",
+            "429",
+            "500",
+            "503",
+            "504",
+        },
+        ("#/components/parameters/NoQuery",),
+    ),
+    ("/v1/catalog", "get"): (
+        "listCatalogRelations",
+        {"200", "400", "401", "429", "500", "503"},
+        ("#/components/parameters/NoQuery",),
+    ),
+    ("/v1/catalog", "head"): (
+        "inspectCatalogRelations",
+        {"200", "400", "401", "429", "500", "503"},
+        ("#/components/parameters/NoQuery",),
+    ),
+    ("/v1/catalog/relations/{relation}", "get"): (
+        "getCatalogRelation",
+        {"200", "400", "401", "404", "429", "500", "503"},
+        (
+            "#/components/parameters/NoQuery",
+            "#/components/parameters/RelationPath",
+        ),
+    ),
+    ("/v1/catalog/relations/{relation}", "head"): (
+        "inspectCatalogRelation",
+        {"200", "400", "401", "404", "429", "500", "503"},
+        (
+            "#/components/parameters/NoQuery",
+            "#/components/parameters/RelationPath",
+        ),
+    ),
+    ("/v1/projections/{projection}/status", "get"): (
+        "getProjectionStatus",
+        {"200", "400", "401", "404", "429", "500", "503"},
+        (
+            "#/components/parameters/NoQuery",
+            "#/components/parameters/ProjectionPath",
+        ),
+    ),
+    ("/v1/projections/{projection}/status", "head"): (
+        "inspectProjectionStatus",
+        {"200", "400", "401", "404", "429", "500", "503"},
+        (
+            "#/components/parameters/NoQuery",
+            "#/components/parameters/ProjectionPath",
+        ),
     ),
 }
 
 REQUEST_SCHEMAS = {
     ("/v1/events", "post"): "#/components/schemas/AppendBatch",
     ("/v1/sources/retire", "post"): "#/components/schemas/RetirementRequest",
+    ("/v1/query", "post"): "#/components/schemas/QueryRequest",
 }
 
 ERROR_STATUSES = {
@@ -64,34 +129,65 @@ ERROR_STATUSES = {
     "invalid_source_lineage": 400,
     "invalid_replay_request": 400,
     "invalid_streams_request": 400,
+    "invalid_query": 400,
+    "invalid_cursor": 400,
     "stream_anchor_unavailable": 400,
     "unauthorized": 401,
     "not_found": 404,
     "source_not_found": 404,
+    "relation_not_found": 404,
+    "field_not_found": 404,
     "method_not_allowed": 405,
     "batch_id_conflict": 409,
     "source_retired": 409,
     "source_lineage_conflict": 409,
     "stream_frontier_conflict": 409,
+    "index_required": 409,
+    "frontier_chain_mismatch": 409,
+    "cursor_expired": 410,
     "body_too_large": 413,
     "unsupported_media_type": 415,
+    "query_timeout": 408,
+    "query_limit_exceeded": 422,
     "overloaded": 429,
     "internal_error": 500,
     "writer_poisoned": 503,
+    "query_unavailable": 503,
+    "projection_frontier_timeout": 504,
+    "generation_corrupt": 500,
 }
 
 RETAINED_SCHEMAS = {
     "AppendBatch",
     "AppendReceipt",
+    "CatalogRelation",
+    "CatalogRelationResponse",
+    "CatalogResponse",
     "Error",
     "Event",
+    "EventSnapshotReceipt",
     "LineagePayload",
     "ReplayResponse",
+    "QueryRequest",
+    "QueryAggregate",
+    "QueryConsistency",
+    "QueryCursor",
+    "QueryFilter",
+    "QueryOrder",
+    "QueryResponse",
+    "QueryResult",
+    "QuerySnapshotReceipt",
+    "QueryStats",
+    "ProjectionStatusResponse",
     "RetirementPayload",
     "RetirementRequest",
     "RetirementResponse",
     "StreamsResponse",
 }
+
+QUERY_MAX_FILTER_DEPTH = 16
+QUERY_MAX_PREDICATES = 128
+QUERY_MAX_SET_VALUES = 10_000
 
 
 class ContractError(ValueError):
@@ -207,6 +303,139 @@ def _validate_instance(
         errors.append(f"{label} example is invalid at {path or '$'}: {error.message}")
 
 
+def validate_instance_invariants(schema_name: str, value: Any) -> list[str]:
+    """Check cross-field rules that portable OpenAPI schemas cannot express."""
+
+    errors: list[str] = []
+    if not isinstance(value, Mapping):
+        return errors
+    if schema_name == "QueryRequest":
+        _check_query_request_invariants(value, errors)
+    elif schema_name == "QueryResponse":
+        _check_query_response_invariants(value, errors)
+    elif schema_name == "CatalogResponse":
+        _check_catalog_invariants(value, value.get("relations"), errors)
+    elif schema_name == "CatalogRelationResponse":
+        relation = value.get("relation")
+        _check_catalog_invariants(
+            value, [relation] if isinstance(relation, Mapping) else relation, errors
+        )
+    return errors
+
+
+def _check_query_request_invariants(value: Mapping[str, Any], errors: list[str]) -> None:
+    raw_queries = value.get("queries")
+    if isinstance(raw_queries, list):
+        names = [query.get("name") for query in raw_queries if isinstance(query, Mapping)]
+        if len(names) != len(set(names)):
+            errors.append("named query names must be distinct")
+        queries = [query.get("query") for query in raw_queries if isinstance(query, Mapping)]
+    else:
+        queries = [value.get("query")]
+
+    total_nodes = 0
+    total_set_values = 0
+    for query in queries:
+        if not isinstance(query, Mapping):
+            continue
+        aggregate = query.get("aggregate")
+        if isinstance(aggregate, Mapping):
+            group_by = aggregate.get("group_by", [])
+            measures = aggregate.get("measures", [])
+            names = list(group_by) if isinstance(group_by, list) else []
+            if isinstance(measures, list):
+                names.extend(
+                    measure.get("name")
+                    for measure in measures
+                    if isinstance(measure, Mapping)
+                )
+            if len(names) != len(set(names)):
+                errors.append("aggregate output names must be distinct")
+        nodes, set_values, depth = _filter_shape(query.get("filter"))
+        total_nodes += nodes
+        total_set_values += set_values
+        if depth > QUERY_MAX_FILTER_DEPTH:
+            errors.append("filter depth exceeds the public contract maximum")
+    if total_nodes > QUERY_MAX_PREDICATES:
+        errors.append("predicate count exceeds the public contract maximum")
+    if total_set_values > QUERY_MAX_SET_VALUES:
+        errors.append("set-value count exceeds the public contract maximum")
+
+
+def _filter_shape(value: Any) -> tuple[int, int, int]:
+    if not isinstance(value, Mapping):
+        return (0, 0, 0)
+    operation = value.get("op")
+    children: list[Any]
+    if operation in {"and", "or"} and isinstance(value.get("args"), list):
+        children = list(value["args"])
+    elif operation == "not":
+        children = [value.get("arg")]
+    else:
+        children = []
+    child_shapes = [_filter_shape(child) for child in children]
+    nodes = 1 + sum(shape[0] for shape in child_shapes)
+    set_values = (
+        len(value.get("values", []))
+        if operation in {"in", "not_in", "contains_any"}
+        and isinstance(value.get("values"), list)
+        else 0
+    ) + sum(shape[1] for shape in child_shapes)
+    depth = 1 + max((shape[2] for shape in child_shapes), default=0)
+    return nodes, set_values, depth
+
+
+def _check_query_response_invariants(value: Mapping[str, Any], errors: list[str]) -> None:
+    raw_results = value.get("results")
+    if not isinstance(raw_results, list):
+        return
+    names = [result.get("name") for result in raw_results if isinstance(result, Mapping)]
+    if len(names) != len(set(names)):
+        errors.append("query result names must be distinct")
+    for result in raw_results:
+        if not isinstance(result, Mapping):
+            continue
+        columns = result.get("columns")
+        rows = result.get("rows")
+        if not isinstance(columns, list) or not isinstance(rows, list):
+            continue
+        if any(isinstance(row, list) and len(row) != len(columns) for row in rows):
+            errors.append("query result row width must match its columns")
+
+
+def _check_catalog_invariants(
+    value: Mapping[str, Any], raw_relations: Any, errors: list[str]
+) -> None:
+    snapshot = value.get("snapshot")
+    if not isinstance(snapshot, Mapping) or not isinstance(raw_relations, list):
+        return
+    relations = [relation for relation in raw_relations if isinstance(relation, Mapping)]
+    names = [relation.get("relation") for relation in relations]
+    if len(names) != len(set(names)):
+        errors.append("Catalog relation names must be distinct")
+    if len(relations) > 1 and names != sorted(names):
+        errors.append("Catalog relations must use canonical ascending order")
+    schema_versions = snapshot.get("schema_versions")
+    projection_versions = snapshot.get("projection_versions")
+    frontier_count = snapshot.get("frontier_event_count")
+    for relation in relations:
+        relation_name = relation.get("relation")
+        if isinstance(schema_versions, Mapping) and schema_versions.get(relation_name) != relation.get(
+            "schema_version"
+        ):
+            errors.append("Catalog schema version must match its snapshot receipt")
+        projection = relation.get("projection")
+        if isinstance(projection, Mapping) and isinstance(projection_versions, Mapping):
+            if projection_versions.get(projection.get("name")) != projection.get("version"):
+                errors.append("Catalog projection version must match its snapshot receipt")
+        freshness = relation.get("freshness")
+        if isinstance(freshness, Mapping) and isinstance(frontier_count, int):
+            log_count = freshness.get("log_frontier_event_count")
+            lag = freshness.get("lag_events")
+            if not isinstance(log_count, int) or lag != log_count - frontier_count:
+                errors.append("Catalog freshness lag must match its frontiers")
+
+
 def _examples(media: Mapping[str, Any]) -> Iterator[tuple[str, Mapping[str, Any]]]:
     if "example" in media:
         yield "example", {"value": media["example"]}
@@ -296,17 +525,20 @@ def _validate_form_example(
     serialized = example.get("serializedValue")
     if not isinstance(data, Mapping) or not isinstance(serialized, str):
         return
-    try:
-        pairs = urllib.parse.parse_qsl(
-            serialized,
-            keep_blank_values=True,
-            strict_parsing=True,
-            encoding="utf-8",
-            errors="strict",
-        )
-    except (UnicodeError, ValueError) as error:
-        errors.append(f"{label} serializedValue is invalid: {error}")
-        return
+    if serialized == "":
+        pairs: list[tuple[str, str]] = []
+    else:
+        try:
+            pairs = urllib.parse.parse_qsl(
+                serialized,
+                keep_blank_values=True,
+                strict_parsing=True,
+                encoding="utf-8",
+                errors="strict",
+            )
+        except (UnicodeError, ValueError) as error:
+            errors.append(f"{label} serializedValue is invalid: {error}")
+            return
     keys = [key for key, _value in pairs]
     if len(keys) != len(set(keys)):
         errors.append(f"{label} serializedValue contains a repeated property")
@@ -343,10 +575,19 @@ def _check_structure(document: JsonObject, errors: list[str]) -> None:
     if document.get("jsonSchemaDialect") != DIALECT:
         errors.append(f"jsonSchemaDialect must equal {DIALECT}")
     info = document.get("info")
-    if not isinstance(info, Mapping) or info.get("version") != "0.2.0":
-        errors.append("info.version must equal 0.2.0")
-    if set(document.get("paths", {})) != {"/v1/events", "/v1/streams", "/v1/sources/retire"}:
-        errors.append("paths must contain exactly the three public route paths")
+    if not isinstance(info, Mapping) or info.get("version") != "0.3.0":
+        errors.append("info.version must equal 0.3.0")
+    expected_paths = {
+        "/v1/events",
+        "/v1/streams",
+        "/v1/sources/retire",
+        "/v1/query",
+        "/v1/catalog",
+        "/v1/catalog/relations/{relation}",
+        "/v1/projections/{projection}/status",
+    }
+    if set(document.get("paths", {})) != expected_paths:
+        errors.append("paths must contain exactly the seven public route paths")
     if "security" in document:
         errors.append("security must not claim one authentication rule for every deployment")
     authentication = document.get("x-deployment-authentication")
@@ -377,9 +618,9 @@ def _check_references(document: JsonObject, errors: list[str]) -> None:
 def _check_operations(document: JsonObject, errors: list[str]) -> None:
     actual = {(path, method): operation for path, method, operation in _operations(document)}
     if set(actual) != set(EXPECTED_OPERATIONS):
-        errors.append("the document must define exactly the six public operations")
+        errors.append("the document must define exactly the thirteen public operations")
     operation_ids: list[str] = []
-    for key, (operation_id, statuses, query_reference) in EXPECTED_OPERATIONS.items():
+    for key, (operation_id, statuses, parameter_references) in EXPECTED_OPERATIONS.items():
         operation = actual.get(key)
         if operation is None:
             continue
@@ -388,8 +629,11 @@ def _check_operations(document: JsonObject, errors: list[str]) -> None:
         if isinstance(operation.get("operationId"), str):
             operation_ids.append(operation["operationId"])
         parameters = operation.get("parameters")
-        if parameters != [{"$ref": query_reference}]:
-            errors.append(f"{key} must use only {query_reference}")
+        expected_parameters = [
+            {"$ref": reference} for reference in parameter_references
+        ]
+        if parameters != expected_parameters:
+            errors.append(f"{key} must use only {list(parameter_references)}")
         responses = operation.get("responses")
         if not isinstance(responses, Mapping):
             errors.append(f"{key} has no responses")
@@ -420,6 +664,22 @@ def _check_query_parameters(document: JsonObject, errors: list[str]) -> None:
         media = dereference(document, content["application/x-www-form-urlencoded"])
         if media.get("schema") != {"$ref": schema_reference}:
             errors.append(f"query parameter {name} must use {schema_reference}")
+
+    relation = parameters.get("RelationPath")
+    if not isinstance(relation, Mapping):
+        errors.append("components.parameters.RelationPath is missing")
+    elif relation.get("in") != "path" or relation.get("required") is not True:
+        errors.append("components.parameters.RelationPath must be a required path parameter")
+    elif relation.get("schema") != {"$ref": "#/components/schemas/RelationName"}:
+        errors.append("components.parameters.RelationPath must use RelationName")
+
+    projection = parameters.get("ProjectionPath")
+    if not isinstance(projection, Mapping):
+        errors.append("components.parameters.ProjectionPath is missing")
+    elif projection.get("in") != "path" or projection.get("required") is not True:
+        errors.append("components.parameters.ProjectionPath must be a required path parameter")
+    elif projection.get("schema") != {"$ref": "#/components/schemas/NameComponent"}:
+        errors.append("components.parameters.ProjectionPath must use NameComponent")
 
 
 def _check_requests(document: JsonObject, errors: list[str]) -> None:
@@ -558,6 +818,18 @@ def _check_semantic_extensions(document: JsonObject, errors: list[str]) -> None:
     lineage_invariants = schemas.get("LineagePayload", {}).get("x-invariants")
     if not isinstance(lineage_invariants, list) or len(lineage_invariants) < 5:
         errors.append("LineagePayload must define successor-lineage invariants")
+
+    for name, minimum in {
+        "QueryRequest": 2,
+        "QueryAggregate": 1,
+        "QueryResult": 1,
+        "QueryResponse": 1,
+        "CatalogRelation": 2,
+        "CatalogResponse": 1,
+    }.items():
+        invariants = schemas.get(name, {}).get("x-invariants")
+        if not isinstance(invariants, list) or len(invariants) < minimum:
+            errors.append(f"{name} must define its cross-field invariants")
 
     error_schema = schemas.get("Error", {})
     conditional = error_schema.get("allOf")

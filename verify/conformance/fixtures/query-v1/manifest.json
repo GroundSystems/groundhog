@@ -1,0 +1,173 @@
+{
+  "v": 1,
+  "cases": [
+    {
+      "name": "built-in event row query request",
+      "file": "valid/event-row-query.json",
+      "schema": "QueryRequest",
+      "valid": true,
+      "focus": "implemented groundhog.events row query"
+    },
+    {
+      "name": "row query request",
+      "file": "valid/row-query.json",
+      "schema": "QueryRequest",
+      "valid": true,
+      "focus": "row selection, nested filters, ordering, and pagination"
+    },
+    {
+      "name": "aggregation query request",
+      "file": "valid/aggregation-query.json",
+      "schema": "QueryRequest",
+      "valid": true,
+      "focus": "grouping, count, sum, and aggregate ordering"
+    },
+    {
+      "name": "multi-query request",
+      "file": "valid/multi-query.json",
+      "schema": "QueryRequest",
+      "valid": true,
+      "focus": "named queries and at-least consistency"
+    },
+    {
+      "name": "row query response",
+      "file": "valid/row-query-response.json",
+      "schema": "QueryResponse",
+      "valid": true,
+      "focus": "columns, rows, cursor state, statistics, and snapshot receipt"
+    },
+    {
+      "name": "Catalog response",
+      "file": "valid/catalog.json",
+      "schema": "CatalogResponse",
+      "valid": true,
+      "focus": "published relation metadata"
+    },
+    {
+      "name": "Catalog relation response",
+      "file": "valid/catalog-relation.json",
+      "schema": "CatalogRelationResponse",
+      "valid": true,
+      "focus": "one published relation schema"
+    },
+    {
+      "name": "query snapshot receipt",
+      "file": "valid/snapshot-receipt.json",
+      "schema": "QuerySnapshotReceipt",
+      "valid": true,
+      "focus": "snapshot identity, event frontier, and version maps"
+    },
+    {
+      "name": "stable query error",
+      "file": "valid/stable-error.json",
+      "schema": "Error",
+      "valid": true,
+      "focus": "stable error code with optional structured details"
+    },
+    {
+      "name": "open query request",
+      "file": "invalid/request-open-object.json",
+      "schema": "QueryRequest",
+      "valid": false,
+      "focus": "unknown request member"
+    },
+    {
+      "name": "open filter object",
+      "file": "invalid/filter-open-object.json",
+      "schema": "QueryRequest",
+      "valid": false,
+      "focus": "unknown comparison-filter member"
+    },
+    {
+      "name": "invalid filter operator",
+      "file": "invalid/filter-operator.json",
+      "schema": "QueryRequest",
+      "valid": false,
+      "focus": "operator outside the version 1 operator set"
+    },
+    {
+      "name": "invalid filter value type",
+      "file": "invalid/filter-value-type.json",
+      "schema": "QueryRequest",
+      "valid": false,
+      "focus": "object value where a scalar is required"
+    },
+    {
+      "name": "mixed query envelope",
+      "file": "invalid/mixed-query-envelope.json",
+      "schema": "QueryRequest",
+      "valid": false,
+      "focus": "single-query and multi-query forms used together"
+    },
+    {
+      "name": "aggregate cursor",
+      "file": "invalid/aggregate-after.json",
+      "schema": "QueryRequest",
+      "valid": false,
+      "focus": "aggregate pagination is not supported"
+    },
+    {
+      "name": "duplicate named queries",
+      "file": "invalid/duplicate-query-name.json",
+      "schema": "QueryRequest",
+      "valid": false,
+      "focus": "multi-query result names are distinct"
+    },
+    {
+      "name": "duplicate aggregate output",
+      "file": "invalid/aggregate-output-name.json",
+      "schema": "QueryRequest",
+      "valid": false,
+      "focus": "group fields and measure names form one distinct output namespace"
+    },
+    {
+      "name": "inconsistent result cursor",
+      "file": "invalid/result-cursor-state.json",
+      "schema": "QueryResponse",
+      "valid": false,
+      "focus": "has_more and next_cursor agree"
+    },
+    {
+      "name": "incorrect result row width",
+      "file": "invalid/result-row-width.json",
+      "schema": "QueryResponse",
+      "valid": false,
+      "focus": "result row width matches the declared columns"
+    },
+    {
+      "name": "inconsistent empty snapshot",
+      "file": "invalid/snapshot-empty-frontier.json",
+      "schema": "QuerySnapshotReceipt",
+      "valid": false,
+      "focus": "an empty receipt uses a null frontier and the genesis chain head"
+    },
+    {
+      "name": "inconsistent Catalog freshness",
+      "file": "invalid/catalog-freshness.json",
+      "schema": "CatalogResponse",
+      "valid": false,
+      "focus": "Catalog lag and version metadata match the enclosing snapshot"
+    },
+    {
+      "name": "open Catalog relation",
+      "file": "invalid/catalog-open-object.json",
+      "schema": "CatalogResponse",
+      "valid": false,
+      "focus": "unknown relation metadata member"
+    },
+    {
+      "name": "open snapshot receipt",
+      "file": "invalid/snapshot-open-object.json",
+      "schema": "QuerySnapshotReceipt",
+      "valid": false,
+      "focus": "unknown snapshot member"
+    },
+    {
+      "name": "invalid stable error code",
+      "file": "invalid/error-code.json",
+      "schema": "Error",
+      "valid": false,
+      "focus": "error code outside the stable set"
+    }
+  ]
+}

@@ -24,6 +24,18 @@ cargo build --locked
 .venv-verify/bin/python -m verify.conformance --binary target/debug/groundhog
 ```
 
+The default live run keeps Query disabled and verifies the base event-log API. Add `--query` to
+start a second authenticated local deployment and validate Query and Catalog responses against the
+public schemas:
+
+```sh
+.venv-verify/bin/python -m verify.conformance \
+  --binary target/debug/groundhog --query
+```
+
+The Query option is local-only. The Query-enabled live checks test projected relations, live
+catch-up, aggregates, limits, atomic multi-query errors, and cursors.
+
 The live checks create one disposable deployment under `/private/tmp`. They check
 successes, errors, pagination, follow, retirement, and successor lineage. They also
 send raw duplicate-member JSON and malformed query strings.
@@ -39,3 +51,17 @@ it exits:
 
 The recorder integration does not run or copy black-box scenarios. It records the
 finite operations that the OpenAPI conformance checks already perform.
+
+To run the same contract against S3, use one unique no-delete parent prefix. The harness adds a
+random child for each process that it starts:
+
+```sh
+python3 -m verify.conformance \
+  --binary target/debug/groundhog \
+  --backend s3 \
+  --s3-bucket company-groundhog \
+  --s3-region us-west-2 \
+  --s3-prefix groundhog-tests/2026-08-11-001
+```
+
+This live S3 command is deferred. Compile and local test coverage do not count as live evidence.

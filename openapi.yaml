@@ -1,21 +1,22 @@
 openapi: 3.2.0
-$self: https://groundhog.dev/openapi/0.2.0
+$self: https://groundhog.dev/openapi/0.3.0
 jsonSchemaDialect: https://spec.openapis.org/oas/3.2/dialect/2025-09-17
 info:
   title: Groundhog HTTP API
-  summary: Durable event-log append, replay, enumeration, and source lifecycle API.
+  summary: Durable event-log and indexed relation API.
   description: |
     Groundhog stores committed events in one ordered log. Append and retirement
     operations use one serialized writer. Replay and stream enumeration read one
-    coherent committed snapshot.
+    coherent committed snapshot. Query reads immutable indexed snapshots of the
+    event log and Groundhog-owned projected relations.
 
     The local runtime serves HTTP/1.1 over a Unix-domain socket. Deployments can
     expose the same HTTP contract through another authenticated transport.
 
-    This document is the authoritative HTTP contract for Groundhog 0.2.0. Clients
+    This document is the authoritative HTTP contract for Groundhog 0.3.0. Clients
     use stable error codes for control flow and treat message text as descriptive.
     Fixed event fields evolve only through additive changes.
-  version: 0.2.0
+  version: 0.3.0
   license:
     name: Functional Source License 1.1, Apache 2.0 Future License
     identifier: FSL-1.1-ALv2
@@ -33,6 +34,10 @@ tags:
     description: Durable stream enumeration.
   - name: Lifecycle
     description: Permanent source retirement.
+  - name: Query
+    description: Typed indexed reads from one immutable query snapshot.
+  - name: Catalog
+    description: Relation schemas, indexes, and projection status.
 paths:
   /v1/events:
     post:
@@ -233,6 +238,247 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/WriterPoisoned'
+  /v1/query:
+    post:
+      operationId: queryRelations
+      tags: [Query]
+      summary: Query one immutable indexed snapshot.
+      description: |
+        The request contains one query or at most 16 named queries. Groundhog pins
+        one published snapshot for the complete request. Every subquery succeeds,
+        or the request returns one error without partial results.
+
+        Query is available only when the deployment enables it. An enabled Query
+        service requires a configured bearer token and the local event-log
+        backend. An enabled Query service exposes the built-in `groundhog.events`
+        relation and every relation in the bundled Agent Operations projection
+        pack. A deployment cannot select a subset.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+      requestBody:
+        required: true
+        description: A closed version 1 query envelope of at most 1 MiB.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+            examples:
+              rows:
+                summary: Current built-in event row query.
+                value:
+                  v: 1
+                  consistency:
+                    mode: published
+                  query:
+                    relation: groundhog.events
+                    select: [event_id, source, stream, kind, observed_at]
+                    filter:
+                      op: eq
+                      field: source
+                      value: stripe
+                    order_by:
+                      - field: event_id
+                        direction: asc
+                    limit: 100
+              aggregate:
+                summary: Projected-relation aggregate request shape.
+                value:
+                  v: 1
+                  consistency:
+                    mode: published
+                  query:
+                    relation: agents.runs_current
+                    filter:
+                      op: eq
+                      field: workspace_id
+                      value: demo
+                    aggregate:
+                      group_by: [status]
+                      measures:
+                        - name: runs
+                          op: count
+                        - name: tokens
+                          op: sum
+                          field: total_tokens
+                    order_by:
+                      - field: runs
+                        direction: desc
+                    limit: 100
+      responses:
+        '200':
+          $ref: '#/components/responses/QuerySuccess'
+        '400':
+          $ref: '#/components/responses/QueryBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/QueryNotFound'
+        '408':
+          $ref: '#/components/responses/QueryTimeout'
+        '409':
+          $ref: '#/components/responses/QueryConflict'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/QueryLimitExceeded'
+        '429':
+          $ref: '#/components/responses/Overloaded'
+        '500':
+          $ref: '#/components/responses/GenerationCorrupt'
+        '503':
+          $ref: '#/components/responses/QueryUnavailable'
+        '504':
+          $ref: '#/components/responses/ProjectionFrontierTimeout'
+  /v1/catalog:
+    get:
+      operationId: listCatalogRelations
+      tags: [Catalog]
+      summary: List published relation metadata.
+      description: |
+        Catalog reads the current query snapshot metadata. It does not scan
+        relation rows. The route is present only when the local Query service is
+        enabled, which requires a configured bearer token.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+      responses:
+        '200':
+          $ref: '#/components/responses/CatalogSuccess'
+        '400':
+          $ref: '#/components/responses/CatalogBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/Overloaded'
+        '500':
+          $ref: '#/components/responses/GenerationCorrupt'
+        '503':
+          $ref: '#/components/responses/QueryUnavailable'
+    head:
+      operationId: inspectCatalogRelations
+      tags: [Catalog]
+      summary: Inspect Catalog response headers.
+      description: |
+        This operation applies the GET contract. It returns the selected status
+        and headers without a response body.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+      responses:
+        '200':
+          $ref: '#/components/responses/HeadJsonSuccess'
+        '400':
+          $ref: '#/components/responses/HeadBadRequest'
+        '401':
+          $ref: '#/components/responses/HeadUnauthorized'
+        '429':
+          $ref: '#/components/responses/HeadOverloaded'
+        '500':
+          $ref: '#/components/responses/HeadInternalError'
+        '503':
+          $ref: '#/components/responses/HeadQueryUnavailable'
+  /v1/catalog/relations/{relation}:
+    get:
+      operationId: getCatalogRelation
+      tags: [Catalog]
+      summary: Get one published relation schema.
+      description: |
+        The response describes one relation from the current query snapshot.
+        Catalog does not scan relation rows. The route is present only when the
+        local Query service is enabled, which requires a configured bearer token.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+        - $ref: '#/components/parameters/RelationPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/CatalogRelationSuccess'
+        '400':
+          $ref: '#/components/responses/CatalogBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/QueryNotFound'
+        '429':
+          $ref: '#/components/responses/Overloaded'
+        '500':
+          $ref: '#/components/responses/GenerationCorrupt'
+        '503':
+          $ref: '#/components/responses/QueryUnavailable'
+    head:
+      operationId: inspectCatalogRelation
+      tags: [Catalog]
+      summary: Inspect one relation response.
+      description: |
+        This operation applies the GET contract. It returns the selected status
+        and headers without a response body.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+        - $ref: '#/components/parameters/RelationPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/HeadJsonSuccess'
+        '400':
+          $ref: '#/components/responses/HeadBadRequest'
+        '401':
+          $ref: '#/components/responses/HeadUnauthorized'
+        '404':
+          $ref: '#/components/responses/HeadNotFound'
+        '429':
+          $ref: '#/components/responses/HeadOverloaded'
+        '500':
+          $ref: '#/components/responses/HeadInternalError'
+        '503':
+          $ref: '#/components/responses/HeadQueryUnavailable'
+  /v1/projections/{projection}/status:
+    get:
+      operationId: getProjectionStatus
+      tags: [Catalog]
+      summary: Get one projection's current publication status.
+      description: |
+        The response identifies the current immutable query snapshot and the
+        projection worker freshness observed for that snapshot.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+        - $ref: '#/components/parameters/ProjectionPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/ProjectionStatusSuccess'
+        '400':
+          $ref: '#/components/responses/CatalogBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ProjectionNotFound'
+        '429':
+          $ref: '#/components/responses/Overloaded'
+        '500':
+          $ref: '#/components/responses/GenerationCorrupt'
+        '503':
+          $ref: '#/components/responses/QueryUnavailable'
+    head:
+      operationId: inspectProjectionStatus
+      tags: [Catalog]
+      summary: Inspect one projection status response.
+      parameters:
+        - $ref: '#/components/parameters/NoQuery'
+        - $ref: '#/components/parameters/ProjectionPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/HeadJsonSuccess'
+        '400':
+          $ref: '#/components/responses/HeadBadRequest'
+        '401':
+          $ref: '#/components/responses/HeadUnauthorized'
+        '404':
+          $ref: '#/components/responses/HeadProjectionNotFound'
+        '429':
+          $ref: '#/components/responses/HeadOverloaded'
+        '500':
+          $ref: '#/components/responses/HeadInternalError'
+        '503':
+          $ref: '#/components/responses/HeadQueryUnavailable'
 components:
   securitySchemes:
     bearerAuth:
@@ -240,6 +486,20 @@ components:
       scheme: bearer
       description: A deployment can require one configured opaque bearer token.
   parameters:
+    RelationPath:
+      name: relation
+      in: path
+      required: true
+      description: A canonical relation name.
+      schema:
+        $ref: '#/components/schemas/RelationName'
+    ProjectionPath:
+      name: projection
+      in: path
+      required: true
+      description: A canonical projection name.
+      schema:
+        $ref: '#/components/schemas/NameComponent'
     NoQuery:
       name: query
       in: querystring
@@ -351,6 +611,10 @@ components:
                 last_event_id: 019c0000-0000-7000-8000-000000000001
                 next_after: 019c0000-0000-7000-8000-000000000001
                 snapshot_through_event_id: 019c0000-0000-7000-8000-000000000004
+                snapshot:
+                  frontier_event_id: 019c0000-0000-7000-8000-000000000004
+                  frontier_event_count: 4
+                  chain_head: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         application/x-ndjson:
           itemSchema:
             $ref: '#/components/schemas/FollowRecord'
@@ -358,11 +622,11 @@ components:
             snapshotAndCaughtUp:
               value: |
                 {"type":"events","phase":"snapshot","events":[],"next_after":null,"snapshot_through_event_id":null}
-                {"type":"caught_up","next_after":null,"snapshot_through_event_id":null}
+                {"type":"caught_up","next_after":null,"snapshot_through_event_id":null,"snapshot":{"frontier_event_id":null,"frontier_event_count":0,"chain_head":"de84c29d7e74ec3e0ac6db8d29ad38be698cacc529bd530f004144e36f06e42b"}}
     HeadReplaySuccess:
       description: Replay succeeded. The response has no body.
     HeadJsonSuccess:
-      description: Stream enumeration succeeded. The response has no body.
+      description: The corresponding JSON GET operation succeeded. The response has no body.
     StreamsSuccess:
       description: One durable stream-enumeration page.
       content:
@@ -401,6 +665,293 @@ components:
                 source: agent_old
                 final_frontier: 019c0000-0000-7000-8000-000000000003
                 retirement_event_id: 019c0000-0000-7000-8000-000000000004
+    QuerySuccess:
+      description: Every query completed against one immutable query snapshot.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/QueryResponse'
+          examples:
+            eventRows:
+              value:
+                v: 1
+                query_id: qry_019c0000000070008000000000000001
+                snapshot:
+                  snapshot_id: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  frontier_event_id: 019c0000-0000-7000-8000-000000000004
+                  frontier_event_count: 4
+                  chain_head: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  projection_versions:
+                    groundhog_events: 1
+                  schema_versions:
+                    groundhog.events: 1
+                results:
+                  - name: query
+                    columns:
+                      - name: event_id
+                        type: uuid
+                        nullable: false
+                      - name: source
+                        type: utf8
+                        nullable: false
+                    rows:
+                      - [019c0000-0000-7000-8000-000000000004, stripe]
+                    has_more: false
+                    next_cursor: null
+                    stats:
+                      rows_examined: 1
+                      bytes_read: 0
+                      elapsed_ms: 3
+    CatalogSuccess:
+      description: Published relation metadata from one query snapshot.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CatalogResponse'
+          examples:
+            projectedRelations:
+              summary: Catalog shape for a later projected relation pack.
+              value:
+                v: 1
+                snapshot:
+                  snapshot_id: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  frontier_event_id: 019c0000-0000-7000-8000-000000000004
+                  frontier_event_count: 4
+                  chain_head: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  projection_versions:
+                    agent_operations: 1
+                  schema_versions:
+                    agents.runs_current: 1
+                relations:
+                  - relation: agents.runs_current
+                    description: Current state for each agent run.
+                    schema_version: 1
+                    projection:
+                      name: agent_operations
+                      version: 1
+                    primary_key: [run_id]
+                    fields:
+                      - name: run_id
+                        type: uuid
+                        nullable: false
+                    indexes:
+                      - name: by_run_id
+                        kind: ordered
+                        fields: [run_id]
+                        supported_operations: [eq, in, lt, lte, gt, gte]
+                    row_count: 2
+                    freshness:
+                      status: current
+                      log_frontier_event_count: 4
+                      lag_events: 0
+                      failure: null
+    CatalogRelationSuccess:
+      description: One published relation schema from one query snapshot.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CatalogRelationResponse'
+          examples:
+            projectedRelation:
+              summary: Catalog detail shape for a later projected relation pack.
+              value:
+                v: 1
+                snapshot:
+                  snapshot_id: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  frontier_event_id: 019c0000-0000-7000-8000-000000000004
+                  frontier_event_count: 4
+                  chain_head: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  projection_versions:
+                    agent_operations: 1
+                  schema_versions:
+                    agents.runs_current: 1
+                relation:
+                  relation: agents.runs_current
+                  description: Current state for each agent run.
+                  schema_version: 1
+                  projection:
+                    name: agent_operations
+                    version: 1
+                  primary_key: [run_id]
+                  fields:
+                    - name: run_id
+                      type: uuid
+                      nullable: false
+                  indexes:
+                    - name: by_run_id
+                      kind: ordered
+                      fields: [run_id]
+                      supported_operations: [eq, in, lt, lte, gt, gte]
+                  row_count: 2
+                  freshness:
+                    status: current
+                    log_frontier_event_count: 4
+                    lag_events: 0
+                    failure: null
+    ProjectionStatusSuccess:
+      description: One projection's current immutable snapshot and worker freshness.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProjectionStatusResponse'
+          examples:
+            current:
+              value:
+                v: 1
+                projection:
+                  name: agent_operations
+                  version: 1
+                snapshot:
+                  snapshot_id: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  frontier_event_id: 019c0000-0000-7000-8000-000000000004
+                  frontier_event_count: 4
+                  chain_head: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  projection_versions:
+                    agent_operations: 1
+                  schema_versions:
+                    agents.runs_current: 1
+                freshness:
+                  status: current
+                  log_frontier_event_count: 4
+                  lag_events: 0
+                  failure: null
+    QueryBadRequest:
+      description: The query request, value, cursor, or operation is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalidQuery:
+              value:
+                error: invalid_query
+                message: The query contains an invalid filter.
+            invalidCursor:
+              value:
+                error: invalid_cursor
+                message: The cursor does not match the query.
+    CatalogBadRequest:
+      description: The Catalog request has an invalid query string.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalidRequest:
+              value:
+                error: invalid_request
+                message: Catalog does not accept query parameters.
+    QueryNotFound:
+      description: A referenced relation or field is not available.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            relation:
+              value:
+                error: relation_not_found
+                message: The relation is not available.
+            field:
+              value:
+                error: field_not_found
+                message: The field does not exist in the relation.
+    ProjectionNotFound:
+      description: The requested projection is not available.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            projection:
+              value:
+                error: not_found
+                message: The projection is not available.
+    QueryTimeout:
+      description: Query execution exceeded its timeout.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            timeout:
+              value:
+                error: query_timeout
+                message: Query execution exceeded its timeout.
+    QueryConflict:
+      description: A required index or the requested event history is unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            index:
+              value:
+                error: index_required
+                message: The query needs another declared index.
+            frontier:
+              value:
+                error: frontier_chain_mismatch
+                message: The receipt does not match Groundhog history.
+    CursorExpired:
+      description: The cursor or its query snapshot is no longer retained.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            expired:
+              value:
+                error: cursor_expired
+                message: The cursor expired.
+    QueryLimitExceeded:
+      description: Query execution exceeded a configured work or result limit.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            limit:
+              value:
+                error: query_limit_exceeded
+                message: The query exceeded a configured limit.
+    GenerationCorrupt:
+      description: Query snapshot validation failed, or Query encountered an internal failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            corrupt:
+              value:
+                error: generation_corrupt
+                message: The query snapshot is corrupt.
+            internal:
+              value:
+                error: internal_error
+                message: Query failed because of an internal error.
+    QueryUnavailable:
+      description: The deployment has no valid published query snapshot.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unavailable:
+              value:
+                error: query_unavailable
+                message: No valid query snapshot is available.
+    ProjectionFrontierTimeout:
+      description: No published query snapshot reached the requested frontier in time.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            timeout:
+              value:
+                error: projection_frontier_timeout
+                message: The projection did not reach the requested frontier.
     AppendBadRequest:
       description: The query, JSON envelope, batch, event, or lineage marker is invalid.
       content:
@@ -551,7 +1102,9 @@ components:
                 error: unsupported_media_type
                 message: The request does not use a supported media type.
     Overloaded:
-      description: Admission expired before the operation started.
+      description: |
+        Groundhog did not admit the request, execution, consistency wait, or
+        cursor snapshot. Route-admission responses include Retry-After.
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
@@ -597,6 +1150,12 @@ components:
           $ref: '#/components/headers/RetryAfter'
     HeadInternalError:
       description: The server encountered an unexpected failure. The response has no body.
+    HeadNotFound:
+      description: The requested relation is not available. The response has no body.
+    HeadProjectionNotFound:
+      description: The requested projection is not available. The response has no body.
+    HeadQueryUnavailable:
+      description: No valid query snapshot is available. The response has no body.
   schemas:
     UuidV7:
       type: string
@@ -667,6 +1226,598 @@ components:
       dependentRequired:
         after: [through]
       additionalProperties: false
+    NameComponent:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{0,62}$'
+    RelationName:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{0,62}\.[a-z][a-z0-9_]{0,62}$'
+      maxLength: 127
+    Sha256Digest:
+      type: string
+      pattern: '^sha256:[0-9a-f]{64}$'
+    EventSnapshotReceipt:
+      title: Groundhog event snapshot receipt
+      description: The exact committed event prefix captured for one operation.
+      type: object
+      required: [frontier_event_id, frontier_event_count, chain_head]
+      properties:
+        frontier_event_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        frontier_event_count:
+          type: integer
+          minimum: 0
+        chain_head:
+          $ref: '#/components/schemas/Sha256'
+      additionalProperties: false
+      allOf:
+        - if:
+            properties:
+              frontier_event_count:
+                const: 0
+          then:
+            properties:
+              frontier_event_id:
+                const: null
+              chain_head:
+                const: 'de84c29d7e74ec3e0ac6db8d29ad38be698cacc529bd530f004144e36f06e42b'
+          else:
+            properties:
+              frontier_event_id:
+                $ref: '#/components/schemas/UuidV7'
+    QuerySnapshotReceipt:
+      title: Groundhog query snapshot receipt
+      description: The immutable query snapshot and its exact committed event prefix.
+      type: object
+      required:
+        - snapshot_id
+        - frontier_event_id
+        - frontier_event_count
+        - chain_head
+        - projection_versions
+        - schema_versions
+      properties:
+        snapshot_id:
+          $ref: '#/components/schemas/Sha256Digest'
+        frontier_event_id:
+          oneOf:
+            - $ref: '#/components/schemas/UuidV7'
+            - type: 'null'
+        frontier_event_count:
+          type: integer
+          minimum: 0
+        chain_head:
+          $ref: '#/components/schemas/Sha256'
+        projection_versions:
+          type: object
+          propertyNames:
+            $ref: '#/components/schemas/NameComponent'
+          additionalProperties:
+            type: integer
+            minimum: 1
+        schema_versions:
+          type: object
+          propertyNames:
+            $ref: '#/components/schemas/RelationName'
+          additionalProperties:
+            type: integer
+            minimum: 1
+      additionalProperties: false
+      allOf:
+        - if:
+            properties:
+              frontier_event_count:
+                const: 0
+          then:
+            properties:
+              frontier_event_id:
+                const: null
+              chain_head:
+                const: 'de84c29d7e74ec3e0ac6db8d29ad38be698cacc529bd530f004144e36f06e42b'
+          else:
+            properties:
+              frontier_event_id:
+                $ref: '#/components/schemas/UuidV7'
+    QueryScalar:
+      description: A typed scalar. The relation schema selects the required JSON encoding.
+      type: [boolean, string, number]
+    QueryFilter:
+      oneOf:
+        - $ref: '#/components/schemas/QueryBooleanFilter'
+        - $ref: '#/components/schemas/QueryNotFilter'
+        - $ref: '#/components/schemas/QueryComparisonFilter'
+        - $ref: '#/components/schemas/QuerySetFilter'
+        - $ref: '#/components/schemas/QueryContainsFilter'
+        - $ref: '#/components/schemas/QueryNullFilter'
+    QueryBooleanFilter:
+      type: object
+      required: [op, args]
+      properties:
+        op:
+          enum: [and, or]
+        args:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            $ref: '#/components/schemas/QueryFilter'
+      additionalProperties: false
+    QueryNotFilter:
+      type: object
+      required: [op, arg]
+      properties:
+        op:
+          const: not
+        arg:
+          $ref: '#/components/schemas/QueryFilter'
+      additionalProperties: false
+    QueryComparisonFilter:
+      type: object
+      required: [op, field, value]
+      properties:
+        op:
+          enum: [eq, not_eq, lt, lte, gt, gte]
+        field:
+          $ref: '#/components/schemas/NameComponent'
+        value:
+          $ref: '#/components/schemas/QueryScalar'
+      additionalProperties: false
+    QuerySetFilter:
+      type: object
+      required: [op, field, values]
+      properties:
+        op:
+          enum: [in, not_in, contains_any]
+        field:
+          $ref: '#/components/schemas/NameComponent'
+        values:
+          type: array
+          maxItems: 10000
+          items:
+            $ref: '#/components/schemas/QueryScalar'
+      additionalProperties: false
+    QueryContainsFilter:
+      type: object
+      required: [op, field, value]
+      properties:
+        op:
+          const: contains
+        field:
+          $ref: '#/components/schemas/NameComponent'
+        value:
+          $ref: '#/components/schemas/QueryScalar'
+      additionalProperties: false
+    QueryNullFilter:
+      type: object
+      required: [op, field]
+      properties:
+        op:
+          enum: [is_null, is_not_null]
+        field:
+          $ref: '#/components/schemas/NameComponent'
+      additionalProperties: false
+    QueryOrder:
+      type: object
+      required: [field, direction]
+      properties:
+        field:
+          $ref: '#/components/schemas/NameComponent'
+        direction:
+          enum: [asc, desc]
+      additionalProperties: false
+    QueryAggregate:
+      type: object
+      required: [group_by, measures]
+      properties:
+        group_by:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/NameComponent'
+        measures:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/QueryMeasure'
+      additionalProperties: false
+      x-invariants:
+        - Group fields and measure output names are distinct across the complete aggregate output.
+    QueryCursor:
+      description: An opaque, integrity-protected keyset pagination cursor.
+      type: string
+      minLength: 1
+    QueryMeasure:
+      oneOf:
+        - $ref: '#/components/schemas/QueryCountMeasure'
+        - $ref: '#/components/schemas/QuerySumMeasure'
+    QueryCountMeasure:
+      type: object
+      required: [name, op]
+      properties:
+        name:
+          $ref: '#/components/schemas/NameComponent'
+        op:
+          const: count
+      additionalProperties: false
+    QuerySumMeasure:
+      type: object
+      required: [name, op, field]
+      properties:
+        name:
+          $ref: '#/components/schemas/NameComponent'
+        op:
+          const: sum
+        field:
+          $ref: '#/components/schemas/NameComponent'
+      additionalProperties: false
+    RelationQuery:
+      type: object
+      required: [relation]
+      properties:
+        relation:
+          $ref: '#/components/schemas/RelationName'
+        select:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/NameComponent'
+        filter:
+          $ref: '#/components/schemas/QueryFilter'
+        aggregate:
+          $ref: '#/components/schemas/QueryAggregate'
+        order_by:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueryOrder'
+        limit:
+          type: integer
+          minimum: 1
+          default: 100
+          x-configured-default: query.default_page_rows
+          x-configured-maximum: query.max_page_rows
+        after:
+          $ref: '#/components/schemas/QueryCursor'
+      oneOf:
+        - required: [select]
+          not:
+            required: [aggregate]
+        - required: [aggregate]
+          allOf:
+            - not:
+                required: [select]
+            - not:
+                required: [after]
+      additionalProperties: false
+    NamedRelationQuery:
+      type: object
+      required: [name, query]
+      properties:
+        name:
+          $ref: '#/components/schemas/NameComponent'
+        query:
+          $ref: '#/components/schemas/RelationQuery'
+      additionalProperties: false
+    QueryConsistency:
+      oneOf:
+        - $ref: '#/components/schemas/PublishedConsistency'
+        - $ref: '#/components/schemas/AtLeastConsistency'
+    PublishedConsistency:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          const: published
+      additionalProperties: false
+    AtLeastConsistency:
+      type: object
+      required: [mode, receipt, wait_timeout_ms]
+      properties:
+        mode:
+          const: at_least
+        receipt:
+          $ref: '#/components/schemas/EventSnapshotReceipt'
+        wait_timeout_ms:
+          type: integer
+          minimum: 1
+          x-configured-maximum: query.max_timeout_ms
+      additionalProperties: false
+    QueryRequest:
+      title: Groundhog Query request
+      type: object
+      required: [v, consistency]
+      properties:
+        v:
+          const: 1
+        consistency:
+          $ref: '#/components/schemas/QueryConsistency'
+        query:
+          $ref: '#/components/schemas/RelationQuery'
+        queries:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items:
+            $ref: '#/components/schemas/NamedRelationQuery'
+      oneOf:
+        - required: [query]
+          not:
+            required: [queries]
+        - required: [queries]
+          not:
+            required: [query]
+      additionalProperties: false
+      x-invariants:
+        - Named query names are distinct within one multi-query request.
+        - The complete request contains at most the configured filter depth, predicate nodes, and total set values.
+    QueryFieldScalarType:
+      type: string
+      enum: [bool, i64, u64, f64, utf8, uuid, timestamp_us_utc, json]
+    QueryFieldType:
+      oneOf:
+        - $ref: '#/components/schemas/QueryFieldScalarType'
+        - type: object
+          required: [list]
+          properties:
+            list:
+              $ref: '#/components/schemas/QueryFieldScalarType'
+          additionalProperties: false
+    QueryColumn:
+      type: object
+      required: [name, type, nullable]
+      properties:
+        name:
+          $ref: '#/components/schemas/NameComponent'
+        type:
+          $ref: '#/components/schemas/QueryFieldType'
+        nullable:
+          type: boolean
+      additionalProperties: false
+    QueryStats:
+      type: object
+      required: [rows_examined, bytes_read, elapsed_ms]
+      properties:
+        rows_examined:
+          type: integer
+          minimum: 0
+        bytes_read:
+          type: integer
+          minimum: 0
+        elapsed_ms:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    QueryResult:
+      type: object
+      required: [name, columns, rows, has_more, next_cursor, stats]
+      properties:
+        name:
+          $ref: '#/components/schemas/NameComponent'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueryColumn'
+        rows:
+          type: array
+          items:
+            type: array
+            items: true
+        has_more:
+          type: boolean
+        next_cursor:
+          oneOf:
+            - $ref: '#/components/schemas/QueryCursor'
+            - type: 'null'
+        stats:
+          $ref: '#/components/schemas/QueryStats'
+      additionalProperties: false
+      oneOf:
+        - properties:
+            has_more:
+              const: true
+            next_cursor:
+              $ref: '#/components/schemas/QueryCursor'
+        - properties:
+            has_more:
+              const: false
+            next_cursor:
+              const: null
+      x-invariants:
+        - Every row has the same width as columns and each value matches its column type and nullability.
+    QueryResponse:
+      title: Groundhog Query response
+      type: object
+      required: [v, query_id, snapshot, results]
+      properties:
+        v:
+          const: 1
+        query_id:
+          type: string
+          pattern: '^qry_[a-zA-Z0-9_-]+$'
+        snapshot:
+          $ref: '#/components/schemas/QuerySnapshotReceipt'
+        results:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items:
+            $ref: '#/components/schemas/QueryResult'
+      additionalProperties: false
+      x-invariants:
+        - Result names are distinct and correspond one-for-one with the submitted query names.
+    RelationProjection:
+      type: object
+      required: [name, version]
+      properties:
+        name:
+          $ref: '#/components/schemas/NameComponent'
+        version:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    RelationField:
+      type: object
+      required: [name, type, nullable]
+      properties:
+        name:
+          $ref: '#/components/schemas/NameComponent'
+        type:
+          $ref: '#/components/schemas/QueryFieldType'
+        nullable:
+          type: boolean
+        description:
+          type: string
+      additionalProperties: false
+    RelationIndex:
+      type: object
+      required: [name, kind, fields, supported_operations]
+      properties:
+        name:
+          $ref: '#/components/schemas/NameComponent'
+        kind:
+          enum: [posting, ordered]
+        fields:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/NameComponent'
+        supported_operations:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            enum: [eq, in, contains, contains_any, lt, lte, gt, gte]
+      additionalProperties: false
+    ProjectionFreshness:
+      type: object
+      required: [status, log_frontier_event_count, lag_events, failure]
+      properties:
+        status:
+          enum: [current, catching_up, failed]
+        log_frontier_event_count:
+          type: integer
+          minimum: 0
+        lag_events:
+          type: integer
+          minimum: 0
+        failure:
+          oneOf:
+            - type: string
+            - type: 'null'
+      additionalProperties: false
+      oneOf:
+        - properties:
+            status:
+              const: current
+            lag_events:
+              const: 0
+            failure:
+              const: null
+        - properties:
+            status:
+              const: catching_up
+            lag_events:
+              minimum: 1
+            failure:
+              const: null
+        - properties:
+            status:
+              const: failed
+            failure:
+              type: string
+              minLength: 1
+    CatalogRelation:
+      type: object
+      required:
+        - relation
+        - description
+        - schema_version
+        - projection
+        - primary_key
+        - fields
+        - indexes
+        - row_count
+        - freshness
+      properties:
+        relation:
+          $ref: '#/components/schemas/RelationName'
+        description:
+          type: string
+        schema_version:
+          type: integer
+          minimum: 1
+        projection:
+          $ref: '#/components/schemas/RelationProjection'
+        primary_key:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/NameComponent'
+        fields:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RelationField'
+        indexes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RelationIndex'
+        row_count:
+          type: integer
+          minimum: 0
+        freshness:
+          $ref: '#/components/schemas/ProjectionFreshness'
+      additionalProperties: false
+      x-invariants:
+        - Schema and projection versions equal the corresponding version entries in the enclosing snapshot receipt.
+        - Freshness lag equals log_frontier_event_count minus the enclosing snapshot frontier_event_count.
+    CatalogResponse:
+      title: Groundhog Catalog response
+      type: object
+      required: [v, snapshot, relations]
+      properties:
+        v:
+          const: 1
+        snapshot:
+          $ref: '#/components/schemas/QuerySnapshotReceipt'
+        relations:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogRelation'
+      additionalProperties: false
+      x-invariants:
+        - Relation names are distinct and use canonical ascending order.
+    CatalogRelationResponse:
+      title: Groundhog Catalog relation response
+      type: object
+      required: [v, snapshot, relation]
+      properties:
+        v:
+          const: 1
+        snapshot:
+          $ref: '#/components/schemas/QuerySnapshotReceipt'
+        relation:
+          $ref: '#/components/schemas/CatalogRelation'
+      additionalProperties: false
+    ProjectionStatusResponse:
+      title: Groundhog projection status response
+      type: object
+      required: [v, projection, snapshot, freshness]
+      properties:
+        v:
+          const: 1
+        projection:
+          $ref: '#/components/schemas/RelationProjection'
+        snapshot:
+          $ref: '#/components/schemas/QuerySnapshotReceipt'
+        freshness:
+          $ref: '#/components/schemas/ProjectionFreshness'
+      additionalProperties: false
+      x-invariants:
+        - The projection version equals the corresponding version in the snapshot receipt.
+        - Freshness lag equals log_frontier_event_count minus the snapshot frontier_event_count.
     SubmittedEvent:
       description: |
         A closed submitted event. Groundhog rejects duplicate JSON members,
@@ -822,6 +1973,7 @@ components:
         - When present, last_event_id equals the final returned event_id.
         - next_after never precedes the request after cursor or last_event_id.
         - snapshot_through_event_id is null exactly when the captured log is empty.
+        - When present, snapshot.frontier_event_id equals snapshot_through_event_id.
       type: object
       required: [events, next_after, snapshot_through_event_id]
       properties:
@@ -839,6 +1991,9 @@ components:
           oneOf:
             - $ref: '#/components/schemas/UuidV7'
             - type: 'null'
+        snapshot:
+          description: An additive complete receipt for the captured event prefix.
+          $ref: '#/components/schemas/EventSnapshotReceipt'
       additionalProperties: false
     FollowEvents:
       title: Follow event page
@@ -866,6 +2021,7 @@ components:
       additionalProperties: false
     FollowCaughtUp:
       title: Follow caught-up marker
+      description: The optional snapshot member is an additive complete receipt.
       type: object
       required: [type, next_after, snapshot_through_event_id]
       properties:
@@ -879,6 +2035,8 @@ components:
           oneOf:
             - $ref: '#/components/schemas/UuidV7'
             - type: 'null'
+        snapshot:
+          $ref: '#/components/schemas/EventSnapshotReceipt'
       additionalProperties: false
     FollowEnd:
       title: Follow terminal record
@@ -1021,20 +2179,32 @@ components:
         - invalid_source_lineage
         - invalid_replay_request
         - invalid_streams_request
+        - invalid_query
+        - invalid_cursor
         - stream_anchor_unavailable
         - unauthorized
         - not_found
         - source_not_found
+        - relation_not_found
+        - field_not_found
         - method_not_allowed
         - batch_id_conflict
         - source_retired
         - source_lineage_conflict
         - stream_frontier_conflict
+        - index_required
+        - frontier_chain_mismatch
+        - cursor_expired
         - body_too_large
         - unsupported_media_type
+        - query_timeout
+        - query_limit_exceeded
         - overloaded
         - internal_error
         - writer_poisoned
+        - query_unavailable
+        - projection_frontier_timeout
+        - generation_corrupt
       x-http-status:
         invalid_request: 400
         invalid_batch: 400
@@ -1043,20 +2213,32 @@ components:
         invalid_source_lineage: 400
         invalid_replay_request: 400
         invalid_streams_request: 400
+        invalid_query: 400
+        invalid_cursor: 400
         stream_anchor_unavailable: 400
         unauthorized: 401
         not_found: 404
         source_not_found: 404
+        relation_not_found: 404
+        field_not_found: 404
         method_not_allowed: 405
         batch_id_conflict: 409
         source_retired: 409
         source_lineage_conflict: 409
         stream_frontier_conflict: 409
+        index_required: 409
+        frontier_chain_mismatch: 409
+        cursor_expired: 410
         body_too_large: 413
         unsupported_media_type: 415
+        query_timeout: 408
+        query_limit_exceeded: 422
         overloaded: 429
         internal_error: 500
         writer_poisoned: 503
+        query_unavailable: 503
+        projection_frontier_timeout: 504
+        generation_corrupt: 500
     IndexedEventError:
       type: object
       required: [index, code, message]

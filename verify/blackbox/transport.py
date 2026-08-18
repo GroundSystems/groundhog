@@ -13,6 +13,8 @@ import tempfile
 import time
 from typing import Any, Mapping
 
+from verify.backend import BackendOptions
+
 
 @dataclass(frozen=True)
 class HttpResponse:
@@ -86,14 +88,16 @@ class UnixHttpClient:
                 connected = True
                 sent = True
                 stream.sendall(wire)
-                return self._read_response(stream)
+                return self._read_response(stream, expect_body=method.upper() != "HEAD")
         except (OSError, ValueError) as error:
             phase = "response" if sent else "request" if connected else "connect"
             raise TransportError(
                 f"Unix HTTP {phase} failed: {error}", outcome_unknown=sent
             ) from error
 
-    def _read_response(self, stream: socket.socket) -> HttpResponse:
+    def _read_response(
+        self, stream: socket.socket, *, expect_body: bool = True
+    ) -> HttpResponse:
         buffer = bytearray()
         while b"\r\n\r\n" not in buffer:
             part = stream.recv(65536)
@@ -116,6 +120,8 @@ class UnixHttpClient:
             name, value = line.split(":", 1)
             parsed_headers.append((name.lower(), value.strip()))
         headers = tuple(parsed_headers)
+        if not expect_body:
+            return HttpResponse(status=status, reason=reason, headers=headers, body=b"")
         transfer_encoding = self._header(headers, "transfer-encoding")
         content_length = self._header(headers, "content-length")
         if transfer_encoding and "chunked" in transfer_encoding.lower():
@@ -196,11 +202,14 @@ class GroundhogProcess:
         *,
         root: str | os.PathLike[str] | None = None,
         startup_timeout: float = 15.0,
+        backend: BackendOptions | None = None,
     ) -> None:
         self.binary = Path(binary).resolve()
         self._owns_root = root is None
         self.root = Path(root) if root is not None else Path(tempfile.mkdtemp(prefix="groundhog-verify-"))
         self.startup_timeout = startup_timeout
+        self.backend = backend or BackendOptions()
+        self.backend.validate()
         self.config_path = self.root / "groundhog.toml"
         self.socket_path = self.root / "data" / "ground.sock"
         self.process: subprocess.Popen[bytes] | None = None
@@ -212,7 +221,12 @@ class GroundhogProcess:
     def initialize(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         completed = subprocess.run(
-            [str(self.binary), "init", str(self.root)],
+            [
+                str(self.binary),
+                "init",
+                str(self.root),
+                *self.backend.init_arguments(self.root),
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
@@ -262,6 +276,16 @@ class GroundhogProcess:
                 process.wait(timeout=5)
         if process.stderr is not None:
             process.stderr.close()
+
+    def reset_local_state(self) -> None:
+        """Delete all local files and reattach to the same remote test prefix."""
+        if self.backend.name != "s3":
+            raise RuntimeError("local-state-loss reset requires the S3 backend")
+        self.stop()
+        shutil.rmtree(self.root)
+        self.root.mkdir(parents=True)
+        self.initialize()
+        self.start()
 
     def close(self) -> None:
         self.stop()

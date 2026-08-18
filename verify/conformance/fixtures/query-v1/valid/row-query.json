@@ -1,0 +1,41 @@
+{
+  "v": 1,
+  "consistency": {
+    "mode": "published"
+  },
+  "query": {
+    "relation": "agents.runs_current",
+    "select": [
+      "run_id",
+      "status",
+      "started_at",
+      "total_tokens"
+    ],
+    "filter": {
+      "op": "and",
+      "args": [
+        {
+          "op": "eq",
+          "field": "workspace_id",
+          "value": "workspace_demo"
+        },
+        {
+          "op": "in",
+          "field": "status",
+          "values": [
+            "running",
+            "completed"
+          ]
+        }
+      ]
+    },
+    "order_by": [
+      {
+        "field": "started_at",
+        "direction": "desc"
+      }
+    ],
+    "limit": 100,
+    "after": "cursor_01JQUERYROWS"
+  }
+}

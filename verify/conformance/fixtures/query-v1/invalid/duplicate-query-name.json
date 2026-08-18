@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "consistency": {"mode": "published"},
+  "queries": [
+    {
+      "name": "runs",
+      "query": {"relation": "agents.runs_current", "select": ["run_id"]}
+    },
+    {
+      "name": "runs",
+      "query": {"relation": "agents.runs_current", "select": ["status"]}
+    }
+  ]
+}

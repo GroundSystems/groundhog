@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verify.backend import BackendOptions
+
 from openapi_schema_validator import OAS32Validator
 
 from verify.conformance.validate import (
@@ -32,6 +34,7 @@ class LiveError(AssertionError):
 
 
 _ACTIVE_RECORDER: BlackboxAdapter | None = None
+_SHORT_TEMP_ROOT = Path("/private/tmp") if Path("/private/tmp").is_dir() else Path("/tmp")
 
 
 @dataclass(frozen=True)
@@ -387,10 +390,19 @@ class NdjsonResponse:
 class GroundhogProcess:
     """Create and serve one disposable Groundhog deployment."""
 
-    def __init__(self, binary: Path, token: str | None = None) -> None:
+    def __init__(
+        self,
+        binary: Path,
+        token: str | None = None,
+        backend: BackendOptions | None = None,
+        query_enabled: bool = False,
+    ) -> None:
         self.binary = binary.resolve()
         self.token = token
-        self.root = Path(tempfile.mkdtemp(prefix="groundhog-conformance-", dir="/private/tmp"))
+        self.backend = backend or BackendOptions()
+        self.backend.validate()
+        self.query_enabled = query_enabled
+        self.root = Path(tempfile.mkdtemp(prefix="groundhog-conformance-", dir=_SHORT_TEMP_ROOT))
         self.socket = self.root / "data" / "ground.sock"
         self.log_path = self.root / "server.log"
         self.process: subprocess.Popen[bytes] | None = None
@@ -398,23 +410,37 @@ class GroundhogProcess:
 
     def start(self) -> None:
         initialized = subprocess.run(
-            [str(self.binary), "init", str(self.root)],
+            [
+                str(self.binary),
+                "init",
+                str(self.root),
+                *self.backend.init_arguments(self.root),
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
         )
         if initialized.returncode != 0:
             raise LiveError(f"groundhog init failed: {initialized.stderr.decode(errors='replace')}")
-        if self.token is not None:
+        if self.token is not None or self.query_enabled:
             config_path = self.root / "groundhog.toml"
             config = config_path.read_text(encoding="utf-8")
-            marker = 'token = ""'
-            if marker not in config:
-                raise LiveError("groundhog init did not write the expected token setting")
-            config_path.write_text(
-                config.replace(marker, f'token = "{self.token}"', 1),
-                encoding="utf-8",
-            )
+            if self.token is not None:
+                marker = 'token = ""'
+                if marker not in config:
+                    raise LiveError("groundhog init did not write the expected token setting")
+                config = config.replace(marker, f'token = "{self.token}"', 1)
+            if self.query_enabled:
+                if self.token is None or self.backend.name != "local":
+                    raise LiveError("live Query conformance requires local storage and a token")
+                if "[query]" not in config:
+                    raise LiveError("groundhog init did not write the expected Query section")
+                config = config.split("[query]", 1)[0] + """[query]
+enabled = true
+backend = "local"
+data_dir = "data/query"
+"""
+            config_path.write_text(config, encoding="utf-8")
         self.log_file = self.log_path.open("wb")
         self.process = subprocess.Popen(
             [str(self.binary), "--config", str(self.root / "groundhog.toml"), "serve"],
@@ -628,9 +654,11 @@ def _check_raw_errors(server: GroundhogProcess, checker: SchemaChecker) -> None:
         raise LiveError("HEAD replay error returned a body")
 
 
-def _check_authentication(binary: Path, checker: SchemaChecker) -> None:
+def _check_authentication(
+    binary: Path, checker: SchemaChecker, backend: BackendOptions
+) -> None:
     token = "conformance-token"
-    with GroundhogProcess(binary, token=token) as server:
+    with GroundhogProcess(binary, token=token, backend=backend) as server:
         unauthorized = assert_error(
             send_raw(server.socket, build_request("GET", "/v1/events")),
             401,
@@ -669,6 +697,102 @@ def _check_authentication(binary: Path, checker: SchemaChecker) -> None:
             "valid bearer token",
         )
         assert_replay_invariants(authorized, "valid bearer token")
+
+
+def _check_query_and_catalog(
+    binary: Path, checker: SchemaChecker, backend: BackendOptions
+) -> None:
+    """Exercise the optional authenticated Query and Catalog routes."""
+
+    token = "query-conformance-token"
+    headers = {"Authorization": f"Bearer {token}"}
+    query = {
+        "v": 1,
+        "consistency": {"mode": "published"},
+        "query": {
+            "relation": "groundhog.events",
+            "select": ["event_id", "source"],
+            "order_by": [{"field": "event_id", "direction": "asc"}],
+            "limit": 10,
+        },
+    }
+    with GroundhogProcess(
+        binary, token=token, backend=backend, query_enabled=True
+    ) as server:
+        assert_error(
+            request_json(server.socket, "POST", "/v1/query", query),
+            401,
+            "unauthorized",
+            checker,
+            "unauthenticated Query",
+        )
+        assert_error(
+            request_json(server.socket, "GET", "/v1/catalog"),
+            401,
+            "unauthorized",
+            checker,
+            "unauthenticated Catalog",
+        )
+        catalog = assert_json(
+            request_json(server.socket, "GET", "/v1/catalog", headers=headers),
+            200,
+            "#/components/schemas/CatalogResponse",
+            checker,
+            "Catalog",
+        )
+        names = [relation["relation"] for relation in catalog["relations"]]
+        if "groundhog.events" not in names:
+            raise LiveError(f"Catalog omitted groundhog.events: {names!r}")
+        if len(names) != len(set(names)) or names != sorted(names):
+            raise LiveError(f"Catalog relations are not distinct and ordered: {names!r}")
+        assert_json(
+            request_json(
+                server.socket,
+                "GET",
+                "/v1/catalog/relations/groundhog.events",
+                headers=headers,
+            ),
+            200,
+            "#/components/schemas/CatalogRelationResponse",
+            checker,
+            "Catalog relation",
+        )
+        head = send_raw(
+            server.socket,
+            build_request("HEAD", "/v1/catalog", headers=headers),
+        )
+        assert_status(head, 200, "Catalog HEAD")
+        if head.body:
+            raise LiveError("Catalog HEAD returned a body")
+        response = assert_json(
+            request_json(server.socket, "POST", "/v1/query", query, headers=headers),
+            200,
+            "#/components/schemas/QueryResponse",
+            checker,
+            "Query",
+        )
+        if response["results"][0]["rows"]:
+            raise LiveError("empty Query deployment returned rows")
+        snapshot = catalog["snapshot"]
+        at_least = {
+            **query,
+            "consistency": {
+                "mode": "at_least",
+                "receipt": {
+                    "frontier_event_id": snapshot["frontier_event_id"],
+                    "frontier_event_count": snapshot["frontier_event_count"],
+                    "chain_head": snapshot["chain_head"],
+                },
+                "wait_timeout_ms": 100,
+            },
+        }
+        assert_json(
+            request_json(server.socket, "POST", "/v1/query", at_least, headers=headers),
+            200,
+            "#/components/schemas/QueryResponse",
+            checker,
+            "at_least Query",
+        )
 
 
 def _check_append_and_replay(server: GroundhogProcess, checker: SchemaChecker) -> None:
@@ -1041,19 +1165,27 @@ def run(
     document_path: Path,
     history_path: Path | None = None,
     history_seed: int = 0,
+    backend: BackendOptions | None = None,
+    query_enabled: bool = False,
 ) -> None:
     """Run all live conformance checks."""
     if not binary.is_file():
         raise LiveError(f"binary does not exist: {binary}")
+    selected_backend = backend or BackendOptions()
+    selected_backend.validate()
+    if query_enabled and selected_backend.name != "local":
+        raise LiveError("live Query conformance requires the local backend")
     document = load_document(document_path)
     validate_document(document)
     checker = SchemaChecker(document)
-    _check_authentication(binary, checker)
+    _check_authentication(binary, checker, selected_backend)
+    if query_enabled:
+        _check_query_and_catalog(binary, checker, selected_backend)
     recorder = None if history_path is None else BlackboxAdapter(history_path, history_seed)
     global _ACTIVE_RECORDER
     _ACTIVE_RECORDER = recorder
     try:
-        with GroundhogProcess(binary) as server:
+        with GroundhogProcess(binary, backend=selected_backend) as server:
             empty = assert_json(
                 request_json(server.socket, "GET", "/v1/events"),
                 200,
@@ -1061,7 +1193,12 @@ def run(
                 checker,
                 "empty replay",
             )
-            if empty != {"events": [], "next_after": None, "snapshot_through_event_id": None}:
+            required_empty = {
+                "events": [],
+                "next_after": None,
+                "snapshot_through_event_id": None,
+            }
+            if any(empty.get(name) != value for name, value in required_empty.items()):
                 raise LiveError("empty replay has an unexpected shape")
             _check_raw_errors(server, checker)
             _check_append_and_replay(server, checker)
@@ -1080,10 +1217,32 @@ def main() -> int:
     parser.add_argument("--document", type=Path, default=Path("openapi.yaml"))
     parser.add_argument("--history", type=Path)
     parser.add_argument("--history-seed", type=int, default=0)
+    parser.add_argument("--backend", choices=("local", "s3"), default="local")
+    parser.add_argument("--s3-bucket")
+    parser.add_argument("--s3-region")
+    parser.add_argument("--s3-prefix")
+    parser.add_argument(
+        "--query",
+        action="store_true",
+        help="enable and exercise the authenticated local Query and Catalog routes",
+    )
     arguments = parser.parse_args()
+    backend = BackendOptions(
+        arguments.backend,
+        arguments.s3_bucket,
+        arguments.s3_region,
+        arguments.s3_prefix,
+    )
     try:
-        run(arguments.binary, arguments.document, arguments.history, arguments.history_seed)
-    except (ContractError, LiveError, OSError) as error:
+        run(
+            arguments.binary,
+            arguments.document,
+            arguments.history,
+            arguments.history_seed,
+            backend,
+            arguments.query,
+        )
+    except (ContractError, LiveError, OSError, ValueError) as error:
         print(error)
         return 1
     print(f"validated {arguments.binary} against {arguments.document}")

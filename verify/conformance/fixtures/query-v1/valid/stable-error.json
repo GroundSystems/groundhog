@@ -1,0 +1,11 @@
+{
+  "error": "index_required",
+  "message": "The query needs a declared index.",
+  "required_index": {
+    "relation": "agents.runs_current",
+    "fields": [
+      "workspace_id",
+      "started_at"
+    ]
+  }
+}

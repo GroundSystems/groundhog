@@ -13,6 +13,7 @@ from verify.conformance.live import (
     parse_response,
     run,
 )
+from verify.backend import BackendOptions
 from verify.conformance.validate import ContractError
 
 
@@ -82,6 +83,16 @@ class RawHttpTests(unittest.TestCase):
             )
             adapter.record(request, response, 1, 2)
             self.assertEqual(adapter.recorder.history().operations, ())
+
+    def test_query_live_mode_rejects_nonlocal_backend_before_start(self) -> None:
+        backend = BackendOptions(
+            "s3", "bucket", "us-west-2", "groundhog-tests/query-live"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / "groundhog"
+            binary.write_bytes(b"binary")
+            with self.assertRaisesRegex(LiveError, "requires the local backend"):
+                run(binary, Path("openapi.yaml"), backend=backend, query_enabled=True)
 
 
 if __name__ == "__main__":

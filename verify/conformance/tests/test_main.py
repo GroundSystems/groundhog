@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 from unittest import mock
 
+from verify.backend import BackendOptions
 from verify.conformance.__main__ import main
 from verify.conformance.validate import ContractError
 
@@ -40,7 +41,7 @@ class MainTests(unittest.TestCase):
         with mock.patch("sys.stdout", output):
             self.assertEqual(main(["--binary", "groundhog"]), 0)
         run_live.assert_called_once_with(
-            Path("groundhog"), Path("openapi.yaml"), None, 0
+            Path("groundhog"), Path("openapi.yaml"), None, 0, BackendOptions(), False
         )
         self.assertEqual(
             output.getvalue(), "validated groundhog against openapi.yaml\n"
@@ -55,6 +56,25 @@ class MainTests(unittest.TestCase):
         with mock.patch("sys.stdout", output):
             self.assertEqual(main([]), 1)
         self.assertEqual(output.getvalue(), "invalid contract\n")
+
+    def test_s3_backend_requires_a_complete_unique_test_location(self) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            main(["--binary", "groundhog", "--backend", "s3"])
+        self.assertEqual(caught.exception.code, 2)
+
+    @mock.patch("verify.conformance.__main__.run_live")
+    @mock.patch("verify.conformance.__main__.validate_document")
+    @mock.patch("verify.conformance.__main__.load_document", return_value={})
+    def test_query_live_checks_are_explicitly_enabled(
+        self,
+        _load_document: mock.Mock,
+        _validate_document: mock.Mock,
+        run_live: mock.Mock,
+    ) -> None:
+        self.assertEqual(main(["--binary", "groundhog", "--query"]), 0)
+        run_live.assert_called_once_with(
+            Path("groundhog"), Path("openapi.yaml"), None, 0, BackendOptions(), True
+        )
 
 
 if __name__ == "__main__":
