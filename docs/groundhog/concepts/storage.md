@@ -4,15 +4,20 @@ description: Understand log durability, Parquet segments, writer ownership, reco
 ---
 
 Users interact with Groundhog through the CLI and HTTP API.
-Do not edit files under the configured data directory.
+Do not edit files under the configured data directory or `query.data_dir`.
 
 ## Durable event log
 
-Groundhog 0.2 stores one kind of product state: the durable append-only event log.
+Groundhog 0.3 stores one durable product record: the append-only event log.
 The log is the backup-critical artifact.
 
-Groundhog stores the log under `[data].dir/log/`.
-The durable storage schema remains version 1.
+An enabled local Query service also stores derived snapshots and indexes under `query.data_dir`.
+Groundhog can rebuild this Query state from the log. Query state is not a log backup.
+
+The local backend stores the log under `[data].dir/log/`.
+The S3 backend stores one immutable-object log under the configured bucket and prefix. It uses
+`format.json`, immutable checkpoints, commits, and chunks, plus one conditionally replaced
+`HEAD.json`. The local and object-log storage formats are separate version-1 formats.
 
 Groundhog stores active appends in a framed tail.
 The `seal` command moves committed history into immutable Parquet segments.
@@ -89,6 +94,10 @@ Restart the service and let Groundhog reopen the log before a retry.
 
 Only one process can write a data directory at a time.
 
+For S3, one claimed writer session owns the current `HEAD.json` epoch. Conditional S3 writes fence a
+stale writer. A poisoned writer stops accepting mutations while its last confirmed snapshot remains
+readable.
+
 - `serve` owns the writer while the service runs.
 - `seal` needs exclusive writer access.
 - `verify` can read while `serve` runs.
@@ -103,6 +112,14 @@ It does not change event values, IDs, order, batch identities, or integrity comm
 
 Stop `serve` before sealing.
 Restart the service after the command finishes.
+
+For S3, run the planned outage before 1,024 active chunks or 256 MiB of stored active chunk bytes,
+whichever occurs first. Each segment seal commit is independently durable. A later failure leaves
+confirmed segments reachable and a retry processes the remaining active chunks. The S3 backend does
+not delete the replaced chunk objects.
+
+The object-log version-1 format is frozen and release-qualified for Groundhog 0.3.0. The accepted
+bytes, limits, and invalid cases are recorded in the object-log vectors.
 
 ## Coherent reads
 
@@ -135,7 +152,7 @@ Preserve a copy and restore from a verified backup when Groundhog refuses the on
 
 ## Old warehouse files
 
-Groundhog 0.2 ignores these Groundhog 0.1 files:
+Groundhog 0.3 ignores these Groundhog 0.1 files:
 
 ```text
 data/warehouse.duckdb
@@ -147,7 +164,7 @@ data/.warehouse.duckdb.candidate-*
 Groundhog never deletes them automatically.
 They are not part of the event log and are not needed after the upgrade.
 
-Operators can delete them manually after they verify the 0.2 deployment and backup.
+Operators can delete them manually after they verify the 0.3 deployment and backup.
 
 ## Backup and restore
 

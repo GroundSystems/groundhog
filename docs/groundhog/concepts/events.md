@@ -80,8 +80,10 @@ Consumers must use `event_id` for cursors and processing order.
 Other kinds describe source-specific occurrences.
 They do not replace record state unless a consumer defines that behavior.
 
-Groundhog does not provide a current-state relation or local SQL.
-Applications build current state, indexes, reports, and other derived views from replay or follow.
+Applications can build current state, indexes, reports, and other derived views from replay or
+follow. An enabled local Query service also exposes event envelopes through the built-in
+`groundhog.events` relation. Groundhog 0.3 does not provide SQL or a bundled current-state projected
+relation pack.
 
 ## Idempotent batches
 
@@ -155,5 +157,6 @@ The pair `(source, batch_id)` supplies the separate idempotency key.
 ## See also
 
 [HTTP API](/groundhog/references/http-api),
+[Query and Catalog](/groundhog/concepts/query),
 [Storage](/groundhog/concepts/storage),
 [Getting started](/guides/getting-started)
