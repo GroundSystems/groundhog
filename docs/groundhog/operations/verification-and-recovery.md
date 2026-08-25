@@ -17,6 +17,9 @@ A writer open can finish recognized interrupted writes before it accepts new mut
 
 Verification is always read-only.
 
+For S3, ordinary recovery and verification use exact object keys. They do not list the bucket or
+remote prefix. Preserve the exact bucket and prefix during investigation.
+
 ## Ordinary open analysis
 
 Every open checks these stored facts:
@@ -56,7 +59,33 @@ It compares chain heads at segment boundaries and the captured frontier.
 It detects changes that conflict with the available commitments and recorded chain heads.
 
 Local chain consistency does not prove that an owner did not replace the complete directory coherently.
-Groundhog 0.2 does not support external anchors.
+Groundhog 0.3 does not support external anchors.
+
+## Query verification
+
+An enabled local Query configuration adds a deep Query pass after log verification succeeds.
+The pass reads the exact `CURRENT` and `FALLBACK` references without applying recovery selection.
+
+The pass checks these facts:
+
+- each reference names a canonical content-addressed manifest
+- each manifest object has the declared size and SHA-256 digest
+- each base and delta row pack has canonical structure and typed rows
+- each relation has the complete declared index sidecar set
+- each base and delta receipt forms one continuous projection history
+- each receipt chain head matches the same captured Groundhog log prefix
+- each projection and schema identity matches the configured relation registry
+- each materialized relation has unique primary keys and the declared row count
+- the snapshot produces valid Catalog relation metadata.
+
+An older `FALLBACK` registry can remain after a registry migration.
+Groundhog checks its reference, manifest, objects, and event receipt without applying the current relation schemas.
+
+The JSON report includes a `query` object with its status, snapshot ID, event frontier, and counters.
+A conclusive Query failure returns exit code 3 and a stable `query_*` failure code.
+
+Query verification does not repair references or select `FALLBACK` after an invalid `CURRENT`.
+Query-disabled verification keeps the log-only JSON report. S3 verification also keeps its existing report.
 
 ## Reports and exit status
 
@@ -109,6 +138,9 @@ When `verify` returns exit code 3:
 8. Compare the result with a known coherent backup.
 9. Restore or investigate on an isolated copy.
 
+For S3, preserve the prefix with IAM and bucket controls instead of making an unverified local copy.
+Do not run the external test cleanup role against a production prefix.
+
 A consumer rebuild cannot repair a corrupt Groundhog log.
 It depends on readable authoritative history.
 
@@ -127,13 +159,17 @@ After a crash or HTTP 503 response:
 Do not remove `.lock`.
 Let Groundhog reopen the directory through its recovery path.
 
+For S3, a new session uses conditional HEAD updates to take over a stopped or failed writer. Do not
+edit `HEAD.json` to bypass this process. If open reports authenticated corruption, stop all writers,
+preserve the prefix, and use the stable verification code for investigation.
+
 ## Old warehouse files
 
-Groundhog 0.2 ignores old warehouse files.
+Groundhog 0.3 ignores old warehouse files.
 Their presence does not identify a log failure.
 
 Do not delete them as part of log recovery.
-Remove them only after the 0.2 upgrade passes verification, backup, and application checks.
+Remove them only after the 0.3 upgrade passes verification, backup, and application checks.
 
 ## Restore validation
 

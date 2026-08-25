@@ -1,6 +1,6 @@
 ---
 title: Deployment operations
-description: Deploy, supervise, maintain, upgrade, and back up one Groundhog 0.2 instance.
+description: Deploy, supervise, maintain, upgrade, and back up one Groundhog 0.3 instance.
 ---
 
 ## Name
@@ -19,8 +19,8 @@ Each option uses the same binary, configuration, socket, writer lock, recovery p
 Groundhog does not contact source systems.
 Connectors and schedulers run outside it and keep their own credentials and source cursors.
 
-Derived-view consumers also run outside Groundhog.
-They use replay or follow to update their own databases and analytical systems.
+External derived-view consumers use replay or follow to update their own databases and analytical
+systems. An enabled local Query service separately exposes Groundhog-owned immutable indexed state.
 
 ## First deployment
 
@@ -52,6 +52,22 @@ They use replay or follow to update their own databases and analytical systems.
 
 6. Configure consumers to replay or follow events and save durable cursors.
 
+7. If the deployment needs Query, stop the service, configure the closed `[query]` section with a
+   non-empty token, and restart it. Query is available only with the local event-log backend.
+
+For an S3 deployment, replace step 1 with:
+
+```sh
+groundhog init /srv/ground/acme \
+  --backend s3 \
+  --bucket company-groundhog \
+  --region us-west-2 \
+  --prefix groundhog/production
+```
+
+Supply credentials through the standard AWS credential provider chain. Do not store AWS credentials
+in `groundhog.toml`. See [S3 operations](/groundhog/operations/s3).
+
 ## Supervision
 
 Run `serve` as a foreground process.
@@ -75,6 +91,8 @@ Use a narrow finite replay when a probe must check a known event.
 | follow over HTTP | no | yes |
 | stream enumeration over HTTP | no | yes |
 | source retirement over HTTP | through the server | yes |
+| Query or Catalog over HTTP | Query snapshot reader | yes |
+| `groundhog query` or `groundhog catalog` | Unix-socket client | yes |
 | `seal` | yes | no |
 | `verify` | no | yes |
 
@@ -94,6 +112,11 @@ Use finite replay to fill gaps before another follow session.
 
 Consumers must define their own rebuild procedure.
 That procedure starts from an empty derived view and replays the Groundhog log.
+
+Groundhog rebuilds the built-in event index from the durable log when Query state is missing or
+invalid at startup. It catches the index and the projections up during startup. A bounded
+publication worker follows new durable events while `serve` runs and publishes new Query snapshots.
+Restart `serve` only when the worker stops or projection status reports a failure.
 
 ## Sealing policy
 
@@ -118,6 +141,10 @@ Treat this result as no work only when the operator expects no unsealed events.
 
 Sealing creates immutable Parquet log segments.
 It does not change the logical event history.
+
+For S3, use the complete [planned seal outage](/groundhog/operations/s3#planned-seal-outage)
+procedure. Run it before 1,024 active chunks or 256 MiB of stored active chunk bytes. A normal S3
+seal refuses a live writer and never deletes the replaced chunk objects.
 
 ## Verification cadence
 
@@ -147,6 +174,10 @@ Monitor these signals:
 - ingest 409 conflicts caused by batch ID or stream frontier misuse
 - follow terminal reasons and reconnect progress
 - consumer cursor age and derived-view processing delay
+- Query snapshot frontier, `query_unavailable`, and `projection_frontier_timeout`
+- `/v1/projections/agent_operations/status`, including event lag and failure details
+- the compaction phase, failed run count, and last failure in the same status response
+- Query limit and overload responses
 - verification exit status and failure code
 - filesystem capacity for `data/log/`.
 
@@ -170,21 +201,32 @@ A conservative manual procedure is:
 
 Do not point two writers at the same original or copied directory.
 
+`query.data_dir` contains derived local indexes and snapshots. It is not required to reconstruct the
+built-in event relation. A backup can include it to reduce rebuild work, but the restore must still
+validate it against the durable event log.
+
+For S3, the configured remote prefix is authoritative. Loss of the local directory is not loss of an
+acknowledged mutation. Reattach with the exact bucket, region, and prefix. Use AWS account controls,
+versioning or replication policy, and backup policy outside Groundhog. Do not grant the Groundhog
+process delete permission.
+
 ## Upgrade from 0.1
 
 Before you replace the binary:
 
 1. Keep the previous pinned binary and a coherent backup.
-2. Read the 0.2 release notes.
+2. Read the 0.3 release notes.
 3. Run `verify --chain` with the 0.1 build.
 4. Stop the writer cleanly.
-5. Remove the `[query]` section from `groundhog.toml`.
-6. Start Groundhog 0.2 against one deployment.
+5. Replace old warehouse or Query settings with the Groundhog 0.3 closed `[query]` section. Leave
+   it disabled for the first start unless Query is required.
+6. Start Groundhog 0.3 against one deployment.
 7. Probe `GET /v1/streams` and a known replay request.
-8. Run `verify --chain` with Groundhog 0.2.
-9. Confirm that application consumers can rebuild or continue their derived views.
+8. If Query is enabled, probe authenticated `GET /v1/catalog` and one bounded event query.
+9. Run `verify --chain` with Groundhog 0.3.
+10. Confirm that application consumers can rebuild or continue their derived views.
 
-Groundhog 0.2 ignores these old files:
+Groundhog 0.3 ignores these old files:
 
 ```text
 data/warehouse.duckdb
@@ -210,7 +252,11 @@ A configured bearer token protects API requests.
 An empty token disables HTTP authentication.
 The token does not encrypt owner-readable files or provide governed operation.
 
-Do not expose the socket through a remote service without suitable transport security, access control, and operational limits.
+Query cannot start with an empty bearer token. This requirement does not encrypt the Unix socket or
+configuration file.
+
+Do not expose the socket through a remote service without suitable transport security, access
+control, and operational limits.
 
 ## See also
 
